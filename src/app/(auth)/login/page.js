@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import axiosInstance from '../../../../lib/axiosInstance'; // Adjust path as needed
+import axiosInstance from '../../../lib/axiosInstance'; // Adjust path as needed
 import Image from 'next/image';
 
 export default function LoginPage() {

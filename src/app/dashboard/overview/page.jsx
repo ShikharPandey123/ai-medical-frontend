@@ -1,14 +1,16 @@
 "use client"
 
-import React from "react"
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import axiosInstance from "../../../../lib/axiosInstance"
+import axiosInstance from "../../../lib/axiosInstance"
 
 export default function DashboardOverview() {
+  const router = useRouter()
+
   const [stats, setStats] = useState({
     totalVisits: 120,
     recentPatients: 85,
@@ -25,7 +27,6 @@ export default function DashboardOverview() {
         setStats(response.data)
       } catch (error) {
         console.error("Failed to fetch dashboard stats:", error)
-        // Keep default values if API fails
       }
     }
 
@@ -33,19 +34,20 @@ export default function DashboardOverview() {
   }, [])
 
   const handleAddNewPatient = () => {
-    // Navigate to add patient page or open modal
-    console.log("Add new patient clicked")
+    // Navigate to patients page with modal open
+    router.push("/dashboard/patients") 
   }
 
   const handleStartRecording = () => {
-    // Navigate to recording page or start recording
-    console.log("Start recording clicked")
+    // Navigate to record visit page
+    router.push("/dashboard/record-visit")
   }
 
   const handleSearch = (e) => {
     e.preventDefault()
     console.log("Searching for:", searchQuery)
-    // Implement search functionality
+    // TODO: Optionally redirect to patients page with query param
+    router.push(`/dashboard/patients?search=${encodeURIComponent(searchQuery)}`)
   }
 
   return (
@@ -66,8 +68,11 @@ export default function DashboardOverview() {
           />
         </form>
 
-        <Button onClick={handleAddNewPatient} className="bg-green-500 hover:bg-green-600 text-white font-medium px-6">
-          Add New Patients
+        <Button
+          onClick={handleAddNewPatient}
+          className="bg-green-500 hover:bg-green-600 text-white font-medium px-6"
+        >
+          Add New Patient
         </Button>
       </div>
 

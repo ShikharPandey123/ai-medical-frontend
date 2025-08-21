@@ -1,8 +1,7 @@
 import axios from "axios"
 
 const axiosInstance = axios.create({
-  baseURL: "http://localhost:5000/api",
-  // baseURL: "https://shrm-backend.onrender.com/api",
+  baseURL: "http://localhost:8080",
   withCredentials: true,
   timeout: 10000, // 10 second timeout
   headers: {
@@ -37,7 +36,7 @@ axiosInstance.interceptors.response.use(
     console.error("- Message:", error.message)
     
     if (error.code === 'ECONNREFUSED') {
-      console.error("Connection refused - is the backend server running on localhost:5000?")
+      console.error("Connection refused - is the backend server running on localhost:8080?")
     }
     
     return Promise.reject(error)

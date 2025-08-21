@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import axiosInstance from "../../../../../lib/axiosInstance"
+import axiosInstance from "../../../../lib/axiosInstance"
 
 export default function PatientDetailPage({ params }) {
   const [patient, setPatient] = useState({

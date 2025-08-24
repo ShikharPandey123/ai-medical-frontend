@@ -1,12 +1,22 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { Home, Users, Plus, MessageSquare, HelpCircle, User, Mic } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { cn } from "@/lib/utils"
+import { Home, Users, Plus, MessageSquare, HelpCircle, User, Mic } from "lucide-react";
+import type { FC } from "react";
+// import Link from "next/link";
+import { cn } from "@/lib/utils";
+// import { usePathname } from "next/navigation";
+import Link from "next/link";
+import { Avatar, AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
+import { usePathname } from "next/navigation.js";
+// import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-const navigationItems = [
+interface NavigationItem {
+  name: string;
+  href: string;
+  icon: FC<{ className?: string }>;
+}
+
+const navigationItems: NavigationItem[] = [
   {
     name: "Dashboard",
     href: "/dashboard/overview",
@@ -32,10 +42,10 @@ const navigationItems = [
     href: "/dashboard/consultation",
     icon: MessageSquare,
   },
-]
+];
 
-export default function Sidebar() {
-  const pathname = usePathname()
+const Sidebar: FC = () => {
+  const pathname = usePathname();
 
   return (
     <aside className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-medical-sidebar border-r border-medical-border-light overflow-y-auto">
@@ -59,8 +69,8 @@ export default function Sidebar() {
         <nav className="flex-1 px-4 py-6">
           <ul className="space-y-2">
             {navigationItems.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
-              const Icon = item.icon
+              const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+              const Icon = item.icon;
 
               return (
                 <li key={item.name}>
@@ -77,7 +87,7 @@ export default function Sidebar() {
                     <span>{item.name}</span>
                   </Link>
                 </li>
-              )
+              );
             })}
           </ul>
         </nav>
@@ -94,5 +104,7 @@ export default function Sidebar() {
         </div>
       </div>
     </aside>
-  )
-}
+  );
+};
+
+export default Sidebar;

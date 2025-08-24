@@ -1,49 +1,56 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter } from "next/navigation.js";
+import { useEffect, useState } from "react";
+import type { FC } from "react";
 
-export default function SplashScreen({
+interface SplashScreenProps {
+  duration?: number;
+  appName?: string;
+  tagline?: string;
+}
+
+const SplashScreen: FC<SplashScreenProps> = ({
   duration = 3000,
   appName = "MediCare Pro",
   tagline = "Your Digital Health Companion",
-}) {
-  const [isVisible, setIsVisible] = useState(true)
-  const [logoScale, setLogoScale] = useState(0)
-  const [textOpacity, setTextOpacity] = useState(0)
-  const router = useRouter()
+}) => {
+  const [isVisible, setIsVisible] = useState(true);
+  const [logoScale, setLogoScale] = useState(0);
+  const [textOpacity, setTextOpacity] = useState(0);
+  const router = useRouter();
 
   useEffect(() => {
     // Logo scale animation
     const logoTimer = setTimeout(() => {
-      setLogoScale(1)
-    }, 200)
+      setLogoScale(1);
+    }, 200);
 
     // Text fade in
     const textTimer = setTimeout(() => {
-      setTextOpacity(1)
-    }, 800)
+      setTextOpacity(1);
+    }, 800);
 
     // Hide splash screen and redirect
     const hideTimer = setTimeout(() => {
-      setIsVisible(false)
+      setIsVisible(false);
       // Redirect to login after fade out animation
       setTimeout(() => {
-        router.push("/login")
-      }, 500)
-    }, duration)
+        router.push("/login");
+      }, 500);
+    }, duration);
 
     return () => {
-      clearTimeout(logoTimer)
-      clearTimeout(textTimer)
-      clearTimeout(hideTimer)
-    }
-  }, [duration, router])
+      clearTimeout(logoTimer);
+      clearTimeout(textTimer);
+      clearTimeout(hideTimer);
+    };
+  }, [duration, router]);
 
   if (!isVisible) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-teal-600 via-cyan-600 to-blue-700 flex items-center justify-center z-50 opacity-0 transition-opacity duration-500 pointer-events-none"></div>
-    )
+    );
   }
 
   return (
@@ -104,5 +111,7 @@ export default function SplashScreen({
         ></div>
       </div>
     </div>
-  )
-}
+  );
+};
+
+export default SplashScreen;

@@ -50,7 +50,7 @@ export default function RegisterPage() {
         specialization: form.specialization,
       })
       setSuccess(res.data.message)
-      router.push("/dashboard/overview");
+      router.push("/login");
       setForm({
         name: "",
         email: "",

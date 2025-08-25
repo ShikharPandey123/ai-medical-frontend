@@ -3,6 +3,7 @@ import type { InternalAxiosRequestConfig } from "axios";
 
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: "http://localhost:8080/api/v1",
+  // baseURL: "https://ai-medical-back-end.onrender.com/api/v1",
   withCredentials: true,
   timeout: 10000, // 10 second timeout
   headers: {
@@ -13,6 +14,20 @@ const axiosInstance: AxiosInstance = axios.create({
 // Request interceptor
 axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    // Add token from localStorage if present
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("token");
+      if (token) {
+        if (config.headers && typeof config.headers.set === 'function') {
+          config.headers.set('Authorization', `Bearer ${token}`);
+        } else {
+          (config.headers as any) = {
+            ...config.headers,
+            Authorization: `Bearer ${token}`,
+          };
+        }
+      }
+    }
     console.log(`Making ${config.method?.toUpperCase()} request to: ${config.baseURL}${config.url}`);
     return config;
   },

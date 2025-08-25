@@ -4,6 +4,7 @@ import { useState, ChangeEvent, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import axiosInstance from "@/lib/axiosInstance";
 import Image from "next/image";
+import { toast } from "sonner";
 
 interface LoginFormData {
   email: string;
@@ -38,16 +39,27 @@ export default function LoginPage() {
         email: formData.email,
         password: formData.password,
       });
-
-      if (response.data.token) {
-        localStorage.setItem("token", response.data.token);
-        router.push("/dashboard/overview");
+      const authHeader =
+        response.header["authorization"] || response.header["Authorization"];
+      let token = null;
+      console.log("Auth Header:", authHeader);
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        token = authHeader.replace("Bearer ", "");
+        localStorage.setItem("token", token);
+        console.log("Token stored:", token);
+      }
+      if (response.data.message === "Login successful") {
+        toast.success("✅ Login successful! Redirecting to dashboard...");
+        setTimeout(() => {
+          router.push("/dashboard/overview");
+        }, 15000);
       }
     } catch (err: any) {
       setError(
         err.response?.data?.message ||
           "Login failed. Please check your credentials and try again."
       );
+      toast.error("❌ Login failed. Please try again.");
     } finally {
       setLoading(false);
     }

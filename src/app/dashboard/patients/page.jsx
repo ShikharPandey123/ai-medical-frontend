@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { toast, Toaster } from "sonner"
 import Link from "next/link"
 import { Search, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -48,9 +49,10 @@ export default function PatientsPage() {
   const [open, setOpen] = useState(false)
   const [newPatient, setNewPatient] = useState({
     name: "",
-    age: "",
-    gender: "",
-    status: "active",
+    email: "",
+    dob: "",
+    medical_history: "",
+    phone_number: "",
   })
 
   useEffect(() => {
@@ -90,43 +92,38 @@ export default function PatientsPage() {
   }
 
   const handleAddPatient = async () => {
-  try {
-    const response = await axiosInstance.post("/patients", newPatient)
+    try {
+      // Log the data being sent
+      console.log("Sending new patient data:", newPatient);
+      const response = await axiosInstance.post("/doctor/create-patient", newPatient);
+      console.log("Backend response:", response.data);
 
-    // Normalize API response to match patient structure
-    const createdPatient = {
-      id: response.data.id || String(Date.now()),
-      name: response.data.name || newPatient.name,
-      age: response.data.age ? parseInt(response.data.age, 10) : parseInt(newPatient.age, 10),
-      gender: response.data.gender || newPatient.gender,
-      status: response.data.status || "active",
-      lastVisit: response.data.lastVisit || new Date().toISOString().split("T")[0],
+      // Extract patient from backend response
+      const createdPatient = {
+        id: response.data.patient?.id || String(Date.now()),
+        name: response.data.patient?.name || newPatient.name,
+        email: response.data.patient?.email || newPatient.email,
+        phone_number: response.data.patient?.phone_number || newPatient.phone_number,
+        dob: response.data.patient?.dob || newPatient.dob,
+        medical_history: response.data.patient?.medical_history || newPatient.medical_history,
+      };
+
+      setPatients((prev) => [...prev, createdPatient]);
+      setFilteredPatients((prev) => [...prev, createdPatient]);
+  toast.success("Patient added successfully!");
+    } catch (error) {
+      console.error("Failed to add patient:", error);
+  toast.error("Failed to add patient. Check console for details.");
+    } finally {
+      setNewPatient({ name: "", email: "", dob: "", medical_history: "", phone_number: "" });
+      setOpen(false);
     }
-
-    setPatients((prev) => [...prev, createdPatient])
-    setFilteredPatients((prev) => [...prev, createdPatient])
-  } catch (error) {
-    // 🧪 fallback dummy patient if API fails
-    const dummyPatient = {
-      id: String(Date.now()),
-      name: newPatient.name,
-      age: parseInt(newPatient.age, 10),
-      gender: newPatient.gender,
-      status: "active",
-      lastVisit: new Date().toISOString().split("T")[0],
-    }
-
-    setPatients((prev) => [...prev, dummyPatient])
-    setFilteredPatients((prev) => [...prev, dummyPatient])
-  } finally {
-    setNewPatient({ name: "", age: "", gender: "", status: "active" })
-    setOpen(false)
-  }
-}
+  };
 
 
   return (
     <div className="p-8">
+      <Toaster position="top-right" richColors />
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Patients</h1>
         <Button
@@ -209,28 +206,37 @@ export default function PatientsPage() {
               <Label>Name</Label>
               <Input
                 value={newPatient.name}
-                onChange={(e) =>
-                  setNewPatient({ ...newPatient, name: e.target.value })
-                }
+                onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
               />
             </div>
             <div>
-              <Label>Age</Label>
+              <Label>Email</Label>
               <Input
-                type="number"
-                value={newPatient.age}
-                onChange={(e) =>
-                  setNewPatient({ ...newPatient, age: e.target.value })
-                }
+                type="email"
+                value={newPatient.email}
+                onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
               />
             </div>
             <div>
-              <Label>Gender</Label>
+              <Label>Date of Birth</Label>
               <Input
-                value={newPatient.gender}
-                onChange={(e) =>
-                  setNewPatient({ ...newPatient, gender: e.target.value })
-                }
+                type="date"
+                value={newPatient.dob}
+                onChange={(e) => setNewPatient({ ...newPatient, dob: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Phone Number</Label>
+              <Input
+                value={newPatient.phone_number}
+                onChange={(e) => setNewPatient({ ...newPatient, phone_number: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Medical History</Label>
+              <Input
+                value={newPatient.medical_history}
+                onChange={(e) => setNewPatient({ ...newPatient, medical_history: e.target.value })}
               />
             </div>
           </div>

@@ -40,9 +40,9 @@ export default function LoginPage() {
         password: formData.password,
       });
       const authHeader =
-        response.header["authorization"] || response.header["Authorization"];
+        response.headers["authorization"] || response.headers["Authorization"];
       let token = null;
-      console.log("Auth Header:", authHeader);
+      // console.log("Auth Header:", authHeader);
       if (authHeader && authHeader.startsWith("Bearer ")) {
         token = authHeader.replace("Bearer ", "");
         localStorage.setItem("token", token);
@@ -52,7 +52,7 @@ export default function LoginPage() {
         toast.success("✅ Login successful! Redirecting to dashboard...");
         setTimeout(() => {
           router.push("/dashboard/overview");
-        }, 15000);
+        }, 2500);
       }
     } catch (err: any) {
       setError(

@@ -13,21 +13,16 @@ const axiosInstance: AxiosInstance = axios.create({
 
 // Request interceptor
 axiosInstance.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    // Add token from localStorage if present
+  (config) => {
+    // This check is good for server-side rendering (SSR) frameworks like Next.js
     if (typeof window !== "undefined") {
       const token = localStorage.getItem("token");
       if (token) {
-        if (config.headers && typeof config.headers.set === 'function') {
-          config.headers.set('Authorization', `Bearer ${token}`);
-        } else {
-          (config.headers as any) = {
-            ...config.headers,
-            Authorization: `Bearer ${token}`,
-          };
-        }
+        // Directly set the Authorization header
+        config.headers.Authorization = `Bearer ${token}`;
       }
     }
+    
     console.log(`Making ${config.method?.toUpperCase()} request to: ${config.baseURL}${config.url}`);
     return config;
   },

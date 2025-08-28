@@ -37,7 +37,7 @@ export default function PatientDetailPage({ params }) {
   useEffect(() => {
     const fetchPatientData = async () => {
       try {
-        const response = await axiosInstance.get(`/patients/${params.id}`)
+        const response = await axiosInstance.get(`/patients/get-patient-by-id/${params.id}`)
         setPatient(response.data)
       } catch (error) {
         console.error("Failed to fetch patient data:", error)

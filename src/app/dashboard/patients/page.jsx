@@ -18,34 +18,9 @@ import { Label } from "@/components/ui/label"
 import axiosInstance from "../../../lib/axiosInstance"
 
 export default function PatientsPage() {
-  const [patients, setPatients] = useState([
-    {
-      id: "1234567",
-      name: "Sophia Clark",
-      age: 32,
-      gender: "Female",
-      lastVisit: "2023-08-15",
-      status: "active",
-    },
-    {
-      id: "1234568",
-      name: "John Smith",
-      age: 45,
-      gender: "Male",
-      lastVisit: "2023-08-14",
-      status: "pending",
-    },
-    {
-      id: "1234569",
-      name: "Emma Johnson",
-      age: 28,
-      gender: "Female",
-      lastVisit: "2023-08-13",
-      status: "active",
-    },
-  ])
+  const [patients, setPatients] = useState([])
   const [searchQuery, setSearchQuery] = useState("")
-  const [filteredPatients, setFilteredPatients] = useState(patients)
+  const [filteredPatients, setFilteredPatients] = useState([])
   const [open, setOpen] = useState(false)
   const [newPatient, setNewPatient] = useState({
     name: "",
@@ -58,9 +33,12 @@ export default function PatientsPage() {
   useEffect(() => {
     const fetchPatients = async () => {
       try {
-        const response = await axiosInstance.get("/patients")
-        setPatients(response.data)
-        setFilteredPatients(response.data)
+        const response = await axiosInstance.get("/patient/get-all-patients")
+        console.log("Fetched patients:", response.data)
+        // Ensure we extract the array from response.data.patients
+        const fetchedPatients = response.data?.data?.patients || []
+        setPatients(fetchedPatients)
+        setFilteredPatients(fetchedPatients)
       } catch (error) {
         console.error("Failed to fetch patients:", error)
       }
@@ -70,33 +48,23 @@ export default function PatientsPage() {
   }, [])
 
   useEffect(() => {
-    const filtered = patients.filter(
-      (patient) =>
-        patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        patient.id.includes(searchQuery),
-    )
+    // Only filter if patients is an array
+    const filtered = Array.isArray(patients)
+      ? patients.filter(
+          (patient) =>
+            patient.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            String(patient.id).includes(searchQuery),
+        )
+      : []
     setFilteredPatients(filtered)
   }, [searchQuery, patients])
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "active":
-        return "bg-green-100 text-green-800"
-      case "pending":
-        return "bg-yellow-100 text-yellow-800"
-      case "inactive":
-        return "bg-gray-100 text-gray-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
 
   const handleAddPatient = async () => {
     try {
       // Log the data being sent
-      console.log("Sending new patient data:", newPatient);
-      const response = await axiosInstance.post("/doctor/create-patient", newPatient);
-      console.log("Backend response:", response.data);
+      console.log("Sending new patient data:", newPatient)
+      const response = await axiosInstance.post("/doctor/create-patient", newPatient)
+      console.log("Backend response:", response.data)
 
       // Extract patient from backend response
       const createdPatient = {
@@ -106,20 +74,19 @@ export default function PatientsPage() {
         phone_number: response.data.patient?.phone_number || newPatient.phone_number,
         dob: response.data.patient?.dob || newPatient.dob,
         medical_history: response.data.patient?.medical_history || newPatient.medical_history,
-      };
+      }
 
-      setPatients((prev) => [...prev, createdPatient]);
-      setFilteredPatients((prev) => [...prev, createdPatient]);
-  toast.success("Patient added successfully!");
+      setPatients((prev) => [...prev, createdPatient])
+      setFilteredPatients((prev) => [...prev, createdPatient])
+      toast.success("Patient added successfully!")
     } catch (error) {
-      console.error("Failed to add patient:", error);
-  toast.error("Failed to add patient. Check console for details.");
+      console.error("Failed to add patient:", error)
+      toast.error("Failed to add patient. Check console for details.")
     } finally {
-      setNewPatient({ name: "", email: "", dob: "", medical_history: "", phone_number: "" });
-      setOpen(false);
+      setNewPatient({ name: "", email: "", dob: "", medical_history: "", phone_number: "" })
+      setOpen(false)
     }
-  };
-
+  }
 
   return (
     <div className="p-8">
@@ -149,7 +116,7 @@ export default function PatientsPage() {
 
       {/* Patients Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredPatients.map((patient) => (
+        {(Array.isArray(filteredPatients) ? filteredPatients : []).map((patient) => (
           <Link key={patient.id} href={`/dashboard/patients/${patient.id}`}>
             <Card className="hover:shadow-md transition-shadow cursor-pointer">
               <CardContent className="p-6">
@@ -157,28 +124,25 @@ export default function PatientsPage() {
                   <h3 className="text-lg font-semibold text-gray-900">
                     {patient.name}
                   </h3>
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                      patient.status,
-                    )}`}
-                  >
-                    {patient.status}
-                  </span>
                 </div>
                 <div className="space-y-2 text-sm text-gray-600">
                   <p>
                     <span className="font-medium">ID:</span> {patient.id}
                   </p>
                   <p>
-                    <span className="font-medium">Age:</span> {patient.age}
+                    <span className="font-medium">Name:</span> {patient.name || 'N/A'}
                   </p>
                   <p>
-                    <span className="font-medium">Gender:</span>{" "}
-                    {patient.gender}
+                    <span className="font-medium">Email:</span> {patient.email || 'N/A'}
                   </p>
                   <p>
-                    <span className="font-medium">Last Visit:</span>{" "}
-                    {patient.lastVisit}
+                    <span className="font-medium">Phone:</span> {patient.phone_number || 'N/A'}
+                  </p>
+                  <p>
+                    <span className="font-medium">Date of Birth:</span> {patient.dob ? new Date(patient.dob).toLocaleDateString() : 'N/A'}
+                  </p>
+                  <p>
+                    <span className="font-medium">Medical History:</span> {patient.medical_history || 'N/A'}
                   </p>
                 </div>
               </CardContent>

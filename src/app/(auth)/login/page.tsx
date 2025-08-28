@@ -39,17 +39,18 @@ export default function LoginPage() {
         email: formData.email,
         password: formData.password,
       });
+      console.log("Response headers:", response.headers);
       const authHeader =
         response.headers["authorization"] || response.headers["Authorization"];
       let token = null;
-      // console.log("Auth Header:", authHeader);
+      console.log("Auth Header:", authHeader);
       if (authHeader && authHeader.startsWith("Bearer ")) {
         token = authHeader.replace("Bearer ", "");
         localStorage.setItem("token", token);
         console.log("Token stored:", token);
       }
       if (response.data.message === "Login successful") {
-        toast.success("✅ Login successful! Redirecting to dashboard...");
+        toast.success("Login successful! Redirecting to dashboard...");
         setTimeout(() => {
           router.push("/dashboard/overview");
         }, 2500);
@@ -59,7 +60,7 @@ export default function LoginPage() {
         err.response?.data?.message ||
           "Login failed. Please check your credentials and try again."
       );
-      toast.error("❌ Login failed. Please try again.");
+      toast.error("Login failed. Please try again.");
     } finally {
       setLoading(false);
     }

@@ -27,21 +27,21 @@ const navigationItems: NavigationItem[] = [
     href: "/dashboard/patients",
     icon: Users,
   },
-  {
-    name: "Record New Visit",
-    href: "/dashboard/record-visit",
-    icon: Plus,
-  },
-  {
-    name: "Start Recording",
-    href: "/dashboard/recording",
-    icon: Mic,
-  },
-  {
-    name: "Consultation",
-    href: "/dashboard/consultation",
-    icon: MessageSquare,
-  },
+  // {
+  //   name: "Record New Visit",
+  //   href: "/dashboard/record-visit",
+  //   icon: Plus,
+  // },
+  // {
+  //   name: "Start Recording",
+  //   href: "/dashboard/recording",
+  //   icon: Mic,
+  // },
+  // {
+  //   name: "Consultation",
+  //   href: "/dashboard/consultation",
+  //   icon: MessageSquare,
+  // },
 ];
 
 const Sidebar: FC = () => {
@@ -50,21 +50,6 @@ const Sidebar: FC = () => {
   return (
     <aside className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-medical-sidebar border-r border-medical-border-light overflow-y-auto">
       <div className="flex flex-col h-full">
-        {/* User Profile Section */}
-        <div className="p-6 border-b border-medical-border-light">
-          <div className="flex items-center space-x-3">
-            <Avatar className="h-10 w-10">
-              <AvatarImage src="/placeholder.svg?height=40&width=40" alt="Profile" />
-              <AvatarFallback className="bg-medical-secondary text-medical-text-secondary">
-                <User className="h-5 w-5" />
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="text-sm font-medium text-medical-text-primary">MediConsult</p>
-            </div>
-          </div>
-        </div>
-
         {/* Navigation Menu */}
         <nav className="flex-1 px-4 py-6">
           <ul className="space-y-2">

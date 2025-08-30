@@ -28,6 +28,8 @@ export default function PatientsPage() {
     dob: "",
     medical_history: "",
     phone_number: "",
+    gender: "",
+    age: "",
   })
 
   useEffect(() => {
@@ -74,6 +76,8 @@ export default function PatientsPage() {
         phone_number: response.data.patient?.phone_number || newPatient.phone_number,
         dob: response.data.patient?.dob || newPatient.dob,
         medical_history: response.data.patient?.medical_history || newPatient.medical_history,
+        gender: response.data.patient?.gender || newPatient.gender,
+        age: response.data.patient?.age || newPatient.age,
       }
 
       setPatients((prev) => [...prev, createdPatient])
@@ -83,7 +87,7 @@ export default function PatientsPage() {
       console.error("Failed to add patient:", error)
       toast.error("Failed to add patient. Check console for details.")
     } finally {
-      setNewPatient({ name: "", email: "", dob: "", medical_history: "", phone_number: "" })
+      setNewPatient({ name: "", email: "", dob: "", medical_history: "", phone_number: "", gender: "", age: "" })
       setOpen(false)
     }
   }
@@ -168,40 +172,69 @@ export default function PatientsPage() {
           <div className="space-y-4">
             <div>
               <Label>Name</Label>
-              <Input
-                value={newPatient.name}
-                onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
-              />
+              <div className="mt-1">
+                <Input
+                  value={newPatient.name}
+                  onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
+                />
+              </div>
             </div>
             <div>
               <Label>Email</Label>
-              <Input
-                type="email"
-                value={newPatient.email}
-                onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
-              />
+              <div className="mt-1">
+                <Input
+                  type="email"
+                  value={newPatient.email}
+                  onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
+                />
+              </div>
             </div>
             <div>
               <Label>Date of Birth</Label>
-              <Input
-                type="date"
-                value={newPatient.dob}
-                onChange={(e) => setNewPatient({ ...newPatient, dob: e.target.value })}
-              />
+              <div className="mt-1">
+                <Input
+                  type="date"
+                  value={newPatient.dob}
+                  onChange={(e) => setNewPatient({ ...newPatient, dob: e.target.value })}
+                />
+              </div>
             </div>
             <div>
               <Label>Phone Number</Label>
-              <Input
-                value={newPatient.phone_number}
-                onChange={(e) => setNewPatient({ ...newPatient, phone_number: e.target.value })}
-              />
+              <div className="mt-1">
+                <Input
+                  value={newPatient.phone_number}
+                  onChange={(e) => setNewPatient({ ...newPatient, phone_number: e.target.value })}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Gender</Label>
+              <div className="mt-1">
+                <Input
+                  value={newPatient.gender}
+                  onChange={(e) => setNewPatient({ ...newPatient, gender: e.target.value })}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Age</Label>
+              <div className="mt-1">
+                <Input
+                  type="number"
+                  value={newPatient.age}
+                  onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
+                />
+              </div>
             </div>
             <div>
               <Label>Medical History</Label>
-              <Input
-                value={newPatient.medical_history}
-                onChange={(e) => setNewPatient({ ...newPatient, medical_history: e.target.value })}
-              />
+              <div className="mt-1">
+                <Input
+                  value={newPatient.medical_history}
+                  onChange={(e) => setNewPatient({ ...newPatient, medical_history: e.target.value })}
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>

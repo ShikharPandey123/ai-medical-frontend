@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import axios from "axios"; // plain axios for S3 upload
 import axiosInstance from "../../../../lib/axiosInstance"
 import { convertWebmToMp3 } from "../../../../lib/audioConvert"
 
@@ -80,16 +81,9 @@ export default function PatientDetailPage({ params }) {
         // Use the new API endpoint for visit history
         const res = await axiosInstance.get(`/api/v1/visit/1/visit-history`);
         let apiVisits = res.data && Array.isArray(res.data) ? res.data : [];
-        // Merge with local visits
-        const localVisits = JSON.parse(localStorage.getItem('localVisits') || '[]');
-        // Only show local visits for this patient
-        const filteredLocal = localVisits.filter(v => v.patient_id == id);
-        setVisits([...filteredLocal, ...apiVisits]);
+        setVisits(apiVisits);
       } catch (err) {
-        // If API fails, show only local visits
-        const localVisits = JSON.parse(localStorage.getItem('localVisits') || '[]');
-        const filteredLocal = localVisits.filter(v => v.patient_id == id);
-        setVisits(filteredLocal);
+        setVisits([]);
       } finally {
         setVisitsLoading(false);
       }
@@ -152,56 +146,47 @@ export default function PatientDetailPage({ params }) {
     try {
       // Convert webm to mp3 using ffmpeg.wasm
       const mp3Blob = await convertWebmToMp3(audioBlob);
-      // Step 2: Upload mp3 audio to S3 using axios
-      await axiosInstance.put(s3UploadUrl, mp3Blob, {
-        headers:
-        {
+      // Step 2: Upload mp3 audio to S3 using plain axios (no Authorization header)
+      await axios.put(s3UploadUrl, mp3Blob, {
+        headers: {
           'Content-Type': 'audio/mp3',
-        },
-        baseURL: '',
+        }
       });
 
-      // Step 3: Notify backend with file key
+      // Extract bucket name from presigned URL
+      let s3Bucket = null;
+      try {
+        const match = s3UploadUrl.match(/^https:\/\/(.*?)\.s3[.-][^/]+\.amazonaws\.com\//);
+        if (match && match[1]) {
+          s3Bucket = match[1];
+        }
+      } catch (e) {
+        s3Bucket = null;
+      }
+
+      if (!s3Bucket) {
+        setUploadResult({ error: 'Could not extract S3 bucket name from URL.' });
+        setUploading(false);
+        return;
+      }
+
+      // Log bucket and key for debugging
+      console.log('Uploading audio:');
+      console.log('  S3 Bucket:', s3Bucket);
+      console.log('  S3 Key:', s3FileKey);
+      console.log('  S3 Upload URL:', s3UploadUrl);
+
+      // Step 3: Notify backend with required fields
       const apiRes = await axiosInstance.post('/visit/start', {
-        patient_id: patient?.id,
-        audio_url: s3FileKey,
+        patient_id: String(patient?.id ?? ''),
+        visit_date: new Date().toISOString(),
+        audio_file_url: s3UploadUrl,
+        status: 'pending',
+        key: s3FileKey,
       });
       setUploadResult(apiRes.data);
     } catch (err) {
-      // S3 upload failed, save to localStorage as dummy visit
-      try {
-        const dummyId = Date.now();
-        const dummyVisit = {
-          id: dummyId,
-          patient_id: patient?.id,
-          visit_date: new Date().toISOString(),
-          doctor_id: 1,
-          key: `dummy-audio-${dummyId}.mp3`,
-          audio_file_url: '',
-          status: 'pending',
-          transcript_text: '',
-          language: 'en',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          isLocal: true,
-        };
-        // Save audio blob as base64 in localStorage
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          const base64Audio = e.target.result;
-          localStorage.setItem(`dummy-audio-${dummyId}`, base64Audio);
-          // Save dummy visit
-          const localVisits = JSON.parse(localStorage.getItem('localVisits') || '[]');
-          localVisits.push(dummyVisit);
-          localStorage.setItem('localVisits', JSON.stringify(localVisits));
-          setUploadResult({ ...dummyVisit, audio_file_url: base64Audio });
-          // Optionally, refresh visits
-          setVisits((prev) => [dummyVisit, ...prev]);
-        };
-        reader.readAsDataURL(audioBlob);
-      } catch (e) {
-        setUploadResult({ error: 'Upload failed and could not save locally.' });
-      }
+      setUploadResult({ error: 'Upload failed.' });
     } finally {
       setUploading(false);
     }

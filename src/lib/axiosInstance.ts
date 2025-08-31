@@ -14,15 +14,17 @@ const axiosInstance: AxiosInstance = axios.create({
 // Request interceptor
 axiosInstance.interceptors.request.use(
   (config) => {
-    // This check is good for server-side rendering (SSR) frameworks like Next.js
+    // Only add Authorization header for requests to our API, not S3
     if (typeof window !== "undefined") {
       const token = localStorage.getItem("token");
-      if (token) {
-        // Directly set the Authorization header
+      // Only add Authorization if the request is to our API baseURL
+      if (token && config.baseURL && config.baseURL.includes("ai-medical-back-end")) {
         config.headers.Authorization = `Bearer ${token}`;
+      } else {
+        // Remove Authorization header for non-API requests (like S3)
+        delete config.headers.Authorization;
       }
     }
-    
     console.log(`Making ${config.method?.toUpperCase()} request to: ${config.baseURL}${config.url}`);
     return config;
   },

@@ -1,84 +1,73 @@
 "use client"
 
 import React, { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, useParams } from "next/navigation";
 import axiosInstance from "../../../../../lib/axiosInstance";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
-export default function VisitDetailPage({ params, searchParams }) {
+export default function VisitDetailPage() {
   const router = useRouter();
   const search = useSearchParams();
   const visitId = search.get("visitId");
-  const { id } = params;
+  const { id } = useParams();
   const [transcript, setTranscript] = useState("");
   const [summary, setSummary] = useState("");
   const [remedy, setRemedy] = useState("");
   const [tags, setTags] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [transcriptLoading, setTranscriptLoading] = useState(true);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [editTranscript, setEditTranscript] = useState("");
   const [updateLoading, setUpdateLoading] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
-  const [localTranscript, setLocalTranscript] = useState(null);
   const [summaryApproved, setSummaryApproved] = useState(false);
   const [approveLoading, setApproveLoading] = useState(false);
   const [sendLoading, setSendLoading] = useState(false);
   const [pdfUrl, setPdfUrl] = useState("");
 
   useEffect(() => {
-    if (!visitId) return;
-    setLoading(true);
+    if (!id) return;
     setError(null);
-    // Check for locally updated transcript first
-    const updated = localStorage.getItem(`updated-transcript-${visitId}`);
-    if (updated) {
-      setTranscript(updated);
-      setLocalTranscript(updated);
-      setLoading(false);
-      return;
-    }
-    // Check for dummy/local visit first
-    const localVisits = JSON.parse(localStorage.getItem('localVisits') || '[]');
-    const localVisit = localVisits.find(v => String(v.id) === String(visitId) && String(v.patient_id) === String(id));
-    if (localVisit) {
-      // Populate dummy data in backend format
-      setTranscript('Hi, Mr. Jones, how are you? I\'m good, Dr. Smith. Nice to see you. ... (dummy transcript)');
-      setSummary('Mr. Jones returns to Dr. Smith for recurring back pain ... (dummy summary)');
-      setRemedy('Use a heating pad for back pain relief and consider yoga or tai chi classes. ... (dummy remedy)');
-      setTags(['chronic pain', 'cost concerns', 'importance of physical therapy', 'alternative therapies', 'insurance issues']);
-      setLoading(false);
-      return;
-    }
-    const fetchData = async () => {
+    setTranscriptLoading(true);
+    setSummaryLoading(true);
+
+    // Fetch transcript first so it can display independently
+    const fetchTranscript = async () => {
       try {
-        const [transRes, summaryRes] = await Promise.all([
-          axiosInstance.get(`/visit/${id}/${visitId}/transcript`),
-          axiosInstance.get(`/visit/${id}/${visitId}/summary`),
-        ]);
-        setTranscript(transRes.data.transcript || "No transcription available.");
-        setSummary(summaryRes.data.summary || "No summary available.");
-        setRemedy(summaryRes.data.remedy || "");
-        setTags(summaryRes.data.perception_tag || []);
+        const transRes = await axiosInstance.get(`/visit/${id}/${visitId}/transcript`);
+        setTranscript(transRes.data?.transcript ?? "No transcription available.");
       } catch (err) {
-        setTranscript('Hi, Mr. Jones, how are you? I\'m good, Dr. Smith. Nice to see you. ... (dummy transcript)');
-        setSummary('Mr. Jones returns to Dr. Smith for recurring back pain ... (dummy summary)');
-        setRemedy('Use a heating pad for back pain relief and consider yoga or tai chi classes. ... (dummy remedy)');
-        setTags(['chronic pain', 'cost concerns', 'importance of physical therapy', 'alternative therapies', 'insurance issues']);
-        setError(null);
+        setError("Failed to fetch transcript.");
       } finally {
-        setLoading(false);
+        setTranscriptLoading(false);
       }
     };
-    fetchData();
+
+    // Fetch summary separately; don't block transcript render
+    const fetchSummary = async () => {
+      try {
+        const summaryRes = await axiosInstance.get(`/visit/${id}/${visitId}/summary`);
+        setSummary(summaryRes.data?.summary ?? "No summary available.");
+        setRemedy(summaryRes.data?.remedy ?? "");
+        setTags(Array.isArray(summaryRes.data?.perception_tag) ? summaryRes.data.perception_tag : []);
+      } catch (err) {
+        // Keep summary empty if it fails; transcript can still show
+      } finally {
+        setSummaryLoading(false);
+      }
+    };
+
+    fetchTranscript();
+    fetchSummary();
   }, [visitId, id]);
 
   return (
     <div className="max-w-3xl mx-auto bg-white rounded-lg shadow p-8 mt-8">
       <Button onClick={() => router.back()} className="mb-4">Back</Button>
       <h2 className="text-2xl font-bold mb-4">Visit Details</h2>
-      {loading ? (
+  {transcriptLoading ? (
         <div>Loading...</div>
       ) : error ? (
         <div className="text-red-600">{error}</div>
@@ -100,16 +89,32 @@ export default function VisitDetailPage({ params, searchParams }) {
                       setUpdateLoading(true);
                       setUpdateMessage("");
                       try {
-                        // Dummy API call
-                        // await axiosInstance.post(`/visit/update-transcript/${visitId}`, { transcript_text: editTranscript });
-                        await new Promise(res => setTimeout(res, 1000)); // simulate network
-                        setTranscript(editTranscript);
-                        setLocalTranscript(editTranscript);
-                        localStorage.setItem(`updated-transcript-${visitId}`, editTranscript);
-                        setUpdateMessage("Transcription updated successfully (dummy)");
+                        let res;
+                        res = await axiosInstance.put(`/visit/update-transcript/${visitId}`, { transcript_text: editTranscript });
+                        const msg = res?.data?.message || "Transcript updated successfully";
+                        const updatedTranscript = res?.data?.visit?.transcript_text ?? editTranscript;
+                        setTranscript(updatedTranscript);
+                        // Refetch transcript from server to ensure UI reflects the persisted value
+                        try {
+                          const transAfter = await axiosInstance.get(`/visit/${id}/${visitId}/transcript`);
+                          if (transAfter?.data?.transcript != null) {
+                            setTranscript(transAfter.data.transcript);
+                          }
+                        } catch (ignore) {
+                          // Ignore refetch errors; we already set optimistic value
+                        }
+                        if (res?.data?.summary) {
+                          setSummary(res.data.summary.summary_text || "");
+                          setRemedy(res.data.summary.remedy || "");
+                          setTags(Array.isArray(res.data.summary.perception_tag) ? res.data.summary.perception_tag : []);
+                        }
+                        setUpdateMessage(msg);
                         setEditMode(false);
+                        toast.success(msg);
                       } catch (err) {
-                        setUpdateMessage("Failed to update transcription (dummy)");
+                        const errMsg = err?.response?.data?.message || "Failed to update transcription";
+                        setUpdateMessage(errMsg);
+                        toast.error(errMsg);
                       } finally {
                         setUpdateLoading(false);
                       }
@@ -133,7 +138,11 @@ export default function VisitDetailPage({ params, searchParams }) {
           </div>
           <div className="mb-6">
             <strong>Summary:</strong>
-            <div className="bg-green-50 border border-green-200 rounded p-4 mb-2">{summary}</div>
+            {summaryLoading ? (
+              <div>Loading summary...</div>
+            ) : (
+              <div className="bg-green-50 border border-green-200 rounded p-4 mb-2">{summary}</div>
+            )}
             {remedy && (
               <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-2">
                 <strong>Remedy:</strong> {remedy}
@@ -150,14 +159,21 @@ export default function VisitDetailPage({ params, searchParams }) {
               <Button className="mt-4" disabled={approveLoading} onClick={async () => {
                 setApproveLoading(true);
                 try {
-                  // Dummy API call
-                  // await axiosInstance.post(`/visit/approved-summary/${visitId}`, { summary_text: summary, perception_tag: tags, remedy });
-                  await new Promise(res => setTimeout(res, 1000)); // simulate network
+                  const res = await axiosInstance.put(`/visit/approved-summary/${visitId}`, {
+                    summary_text: summary,
+                    perception_tag: tags,
+                    remedy,
+                  });
+                  const srvSummary = res?.data?.summary;
+                  if (srvSummary) {
+                    setSummary(srvSummary.summary_text || "");
+                    setRemedy(srvSummary.remedy || "");
+                    setTags(Array.isArray(srvSummary.perception_tag) ? srvSummary.perception_tag : []);
+                  }
                   setSummaryApproved(true);
-                  toast.success("Summary approved (dummy)");
+                  toast.success(res?.data?.message || "Summary approved");
                 } catch (err) {
-                  setSummaryApproved(true);
-                  toast.success("Summary approved (dummy)");
+                  toast.error(err?.response?.data?.message || "Failed to approve summary");
                 } finally {
                   setApproveLoading(false);
                 }
@@ -165,17 +181,15 @@ export default function VisitDetailPage({ params, searchParams }) {
             )}
             {summaryApproved && (
               <div className="flex gap-2 mt-4">
-                <Button disabled={sendLoading} onClick={async () => {
+        <Button disabled={sendLoading} onClick={async () => {
                   setSendLoading(true);
                   try {
-                    // Dummy API call
-                    // const res = await axiosInstance.post(`/visit/${patientId}/${visitId}/send-summary`);
-                    await new Promise(res => setTimeout(res, 1000)); // simulate network
-                    setPdfUrl("https://testmedical1.s3.amazonaws.com/summaries/visit_22_1755858566530.pdf");
-                    toast.success("Summary sent to patient via email and SMS (dummy)");
+          const res = await axiosInstance.get(`/visit/${id}/${visitId}/send-summary`);
+          const url = res?.data?.pdfUrl || res?.data?.pdf_url || res?.data?.url || "";
+                    setPdfUrl(url);
+          toast.success(res?.data?.message || "Summary sent to patient via email and SMS");
                   } catch (err) {
-                    setPdfUrl("https://testmedical1.s3.amazonaws.com/summaries/visit_22_1755858566530.pdf");
-                    toast.success("Summary sent to patient via email and SMS (dummy)");
+          toast.error(err?.response?.data?.message || "Failed to send summary");
                   } finally {
                     setSendLoading(false);
                   }

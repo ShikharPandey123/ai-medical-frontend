@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { Mic, StopCircle, UploadCloud } from "lucide-react"
 import { User } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -19,11 +19,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import axios from "axios"; // plain axios for S3 upload
 import axiosInstance from "../../../../lib/axiosInstance"
+import { toast } from "sonner";
 import { convertWebmToMp3 } from "../../../../lib/audioConvert"
 
-export default function PatientDetailPage({ params }) {
+export default function PatientDetailPage() {
   const router = useRouter();
-  const { id } = React.use(params)
+  // In client components, use useParams() to read route params
+  const { id } = useParams();
   const [patient, setPatient] = useState();
 
   const [doctor, setDoctor] = useState({ name: '', specialization: '' });
@@ -45,6 +47,21 @@ export default function PatientDetailPage({ params }) {
   const [visits, setVisits] = useState([]);
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [visitsLoading, setVisitsLoading] = useState(false);
+  // For refreshing visits after upload
+  const fetchVisits = async () => {
+    setVisitsLoading(true);
+    try {
+      const res = await axiosInstance.get(`/visit/${id}/visit-history`);
+      const apiVisits = Array.isArray(res.data?.visits) ? res.data.visits : [];
+      // Sort by visit_date desc so newest first
+      apiVisits.sort((a, b) => new Date(b.visit_date) - new Date(a.visit_date));
+      setVisits(apiVisits);
+    } catch (err) {
+      setVisits([]);
+    } finally {
+      setVisitsLoading(false);
+    }
+  };
 
   // Audio recording state
   const [showMicDialog, setShowMicDialog] = useState(false);
@@ -75,20 +92,8 @@ export default function PatientDetailPage({ params }) {
   }, [id]);
 
   useEffect(() => {
-    const fetchVisits = async () => {
-      setVisitsLoading(true);
-      try {
-        // Use the new API endpoint for visit history
-        const res = await axiosInstance.get(`/api/v1/visit/1/visit-history`);
-        let apiVisits = res.data && Array.isArray(res.data) ? res.data : [];
-        setVisits(apiVisits);
-      } catch (err) {
-        setVisits([]);
-      } finally {
-        setVisitsLoading(false);
-      }
-    };
     if (id) fetchVisits();
+    // eslint-disable-next-line
   }, [id]);
 
   const handleStartRecording = () => {
@@ -143,6 +148,7 @@ export default function PatientDetailPage({ params }) {
     if (!audioBlob || !s3UploadUrl || !s3FileKey) return;
     setUploading(true);
     setUploadResult(null);
+    toast.loading('Uploading audio...');
     try {
       // Convert webm to mp3 using ffmpeg.wasm
       const mp3Blob = await convertWebmToMp3(audioBlob);
@@ -153,42 +159,34 @@ export default function PatientDetailPage({ params }) {
         }
       });
 
-      // Extract bucket name from presigned URL
-      let s3Bucket = null;
-      try {
-        const match = s3UploadUrl.match(/^https:\/\/(.*?)\.s3[.-][^/]+\.amazonaws\.com\//);
-        if (match && match[1]) {
-          s3Bucket = match[1];
-        }
-      } catch (e) {
-        s3Bucket = null;
-      }
-
-      if (!s3Bucket) {
-        setUploadResult({ error: 'Could not extract S3 bucket name from URL.' });
+      // Resolve patient id from loaded patient or route param
+      const patientId = String(patient?.id ?? id ?? '');
+      if (!patientId) {
+        toast.dismiss();
+        toast.error('Patient ID is missing.');
         setUploading(false);
         return;
       }
 
-      // Log bucket and key for debugging
-      console.log('Uploading audio:');
-      console.log('  S3 Bucket:', s3Bucket);
-      console.log('  S3 Key:', s3FileKey);
-      console.log('  S3 Upload URL:', s3UploadUrl);
-
-      // Step 3: Notify backend with required fields
-      const apiRes = await axiosInstance.post('/visit/start', {
-        patient_id: String(patient?.id ?? ''),
+      const payload = {
+        patient_id: patientId,
         visit_date: new Date().toISOString(),
-        audio_file_url: s3UploadUrl,
+        audio_file_url: s3FileKey,
         status: 'pending',
         key: s3FileKey,
-      });
+      };
+      console.log('POST /visit/start payload:', payload);
+      const apiRes = await axiosInstance.post('/visit/start', payload);
       setUploadResult(apiRes.data);
+      toast.success('Audio uploaded successfully!');
+      // Refresh visit history
+      fetchVisits();
     } catch (err) {
       setUploadResult({ error: 'Upload failed.' });
+      toast.error('Audio upload failed!');
     } finally {
       setUploading(false);
+      toast.dismiss();
     }
   };
 
@@ -335,28 +333,6 @@ export default function PatientDetailPage({ params }) {
               </Button>
             </div>
           )}
-          {uploadResult && (
-            <div className="mb-6">
-              {uploadResult.error ? (
-                <span className="text-red-600">{uploadResult.error}</span>
-              ) : (
-                <div className="bg-green-50 border border-green-200 rounded p-4 overflow-x-auto">
-                  <div className="font-semibold mb-2">Audio Uploaded!</div>
-                  <div className="flex flex-col gap-1">
-                    <div>
-                      <strong>Audio URL:</strong>
-                      <span className="block break-all max-w-full">
-                        <a href={uploadResult.audio_file_url} className="text-blue-600 underline" target="_blank" rel="noopener noreferrer">{uploadResult.audio_file_url}</a>
-                      </span>
-                    </div>
-                    <div><strong>Status:</strong> {uploadResult.status}</div>
-                    <div><strong>Key:</strong> {uploadResult.key}</div>
-                    <div><strong>Visit Date:</strong> {uploadResult.visit_date ? new Date(uploadResult.visit_date).toLocaleString() : '-'}</div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
           {/* Visit History Table */}
           <div>
             <h2 className="text-2xl font-bold mb-4">Visit History</h2>
@@ -376,10 +352,32 @@ export default function PatientDetailPage({ params }) {
                     <tr
                       key={visit.id}
                       className="cursor-pointer hover:bg-gray-100"
-                      onClick={() => router.push(`/dashboard/patients/${id}/visit?visitId=${visit.id}`)}
                     >
                       <td className="py-2 px-4 border-b align-middle">{new Date(visit.visit_date).toLocaleString()}</td>
-                      <td className="py-2 px-4 border-b align-middle">{visit.status}</td>
+                      <td className="py-2 px-4 border-b align-middle">
+                        <select
+                          className="border rounded px-2 py-1 bg-white"
+                          value={visit.status}
+                          onChange={async (e) => {
+                            const newStatus = e.target.value;
+                            try {
+                              // Optionally show a loading toast
+                              toast.loading('Updating status...');
+                              await axiosInstance.post(`/visit/update-status/${visit.id}`, { status: newStatus });
+                              // Update local state
+                              setVisits((prev) => prev.map(v => v.id === visit.id ? { ...v, status: newStatus } : v));
+                              toast.success('Status updated!');
+                            } catch (err) {
+                              toast.error('Failed to update status');
+                            } finally {
+                              toast.dismiss();
+                            }
+                          }}
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="completed">Completed</option>
+                        </select>
+                      </td>
                       <td className="py-2 px-4 border-b align-middle">
                         <Button
                           variant="link"
@@ -389,7 +387,7 @@ export default function PatientDetailPage({ params }) {
                             router.push(`/dashboard/patients/${id}/visit?visitId=${visit.id}`);
                           }}
                         >
-                          View
+                          View Transcript
                         </Button>
                       </td>
                     </tr>

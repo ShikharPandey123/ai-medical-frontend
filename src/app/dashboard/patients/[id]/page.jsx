@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
-import { Mic, StopCircle, UploadCloud } from "lucide-react"
-import { User } from "lucide-react"
+import { Mic, StopCircle, UploadCloud, User, Edit3, CheckCircle, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -17,18 +16,39 @@ import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import axios from "axios"; // plain axios for S3 upload
+import axios from "axios"
 import axiosInstance from "../../../../lib/axiosInstance"
-import { toast } from "sonner";
+import { toast } from "sonner"
 import { convertWebmToMp3 } from "../../../../lib/audioConvert"
 
 export default function PatientDetailPage() {
   const router = useRouter();
-  // In client components, use useParams() to read route params
   const { id } = useParams();
-  const [patient, setPatient] = useState();
-
+  
+  const [patient, setPatient] = useState(null);
   const [doctor, setDoctor] = useState({ name: '', specialization: '' });
+  const [activeTab, setActiveTab] = useState("transcriptions");
+  const [visits, setVisits] = useState([]);
+  const [visitsLoading, setVisitsLoading] = useState(false);
+  const [visitSummaries, setVisitSummaries] = useState({});
+  const [summariesLoading, setSummariesLoading] = useState(false);
+  const [editingTranscript, setEditingTranscript] = useState(null);
+  const [editTranscriptText, setEditTranscriptText] = useState("");
+  const [updatingTranscript, setUpdatingTranscript] = useState(false);
+  const [approvingSummary, setApprovingSummary] = useState(null);
+  const [sendingNotification, setSendingNotification] = useState(null);
+
+  // Audio recording state
+  const [showMicDialog, setShowMicDialog] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [s3UploadUrl, setS3UploadUrl] = useState(null);
+  const [s3FileKey, setS3FileKey] = useState(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
+  // API data fetching
   useEffect(() => {
     const fetchDoctorData = async () => {
       try {
@@ -44,36 +64,6 @@ export default function PatientDetailPage() {
     fetchDoctorData();
   }, []);
 
-  const [visits, setVisits] = useState([]);
-  const [selectedVisit, setSelectedVisit] = useState(null);
-  const [visitsLoading, setVisitsLoading] = useState(false);
-  // For refreshing visits after upload
-  const fetchVisits = async () => {
-    setVisitsLoading(true);
-    try {
-      const res = await axiosInstance.get(`/visit/${id}/visit-history`);
-      const apiVisits = Array.isArray(res.data?.visits) ? res.data.visits : [];
-      // Sort by visit_date desc so newest first
-      apiVisits.sort((a, b) => new Date(b.visit_date) - new Date(a.visit_date));
-      setVisits(apiVisits);
-    } catch (err) {
-      setVisits([]);
-    } finally {
-      setVisitsLoading(false);
-    }
-  };
-
-  // Audio recording state
-  const [showMicDialog, setShowMicDialog] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState(null);
-  const [s3UploadUrl, setS3UploadUrl] = useState(null);
-  const [s3FileKey, setS3FileKey] = useState(null);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-
   useEffect(() => {
     const fetchPatientData = async () => {
       try {
@@ -88,13 +78,159 @@ export default function PatientDetailPage() {
         console.error("Failed to fetch patient data:", error)
       }
     };
-    fetchPatientData();
+    if (id) fetchPatientData();
   }, [id]);
+
+  const fetchVisits = async () => {
+    setVisitsLoading(true);
+    try {
+      const res = await axiosInstance.get(`/visit/${id}/visit-history`);
+      const apiVisits = Array.isArray(res.data?.visits) ? res.data.visits : [];
+      apiVisits.sort((a, b) => new Date(b.visit_date) - new Date(a.visit_date));
+      setVisits(apiVisits);
+    } catch (err) {
+      setVisits([]);
+    } finally {
+      setVisitsLoading(false);
+    }
+  };
+
+  const fetchVisitSummary = async (patientId, visitId) => {
+    try {
+      const res = await axiosInstance.get(`/visit/${patientId}/${visitId}/summary`);
+      return res.data;
+    } catch (err) {
+      console.error(`Failed to fetch summary for visit ${visitId}:`, err);
+      return null;
+    }
+  };
+
+  const fetchAllSummaries = async () => {
+    if (visits.length === 0) return;
+    
+    setSummariesLoading(true);
+    const summariesData = {};
+    
+    await Promise.all(
+      visits.map(async (visit) => {
+        const summaryData = await fetchVisitSummary(id, visit.id);
+        if (summaryData) {
+          summariesData[visit.id] = summaryData;
+        }
+      })
+    );
+    
+    setVisitSummaries(summariesData);
+    setSummariesLoading(false);
+  };
+
+  const handleUpdateTranscript = (visit) => {
+    setEditingTranscript(visit);
+    setEditTranscriptText(visit.transcript_text || "");
+  };
+
+  const handleSaveTranscript = async () => {
+    if (!editingTranscript) return;
+    
+    setUpdatingTranscript(true);
+    try {
+      await axiosInstance.put(`/visit/update-transcript/${editingTranscript.id}`, {
+        transcript_text: editTranscriptText
+      });
+      
+      // Update the local visits state
+      setVisits(prevVisits => 
+        prevVisits.map(visit => 
+          visit.id === editingTranscript.id 
+            ? { ...visit, transcript_text: editTranscriptText }
+            : visit
+        )
+      );
+      
+      alert('Transcript updated successfully!');
+      setEditingTranscript(null);
+      setEditTranscriptText("");
+    } catch (error) {
+      console.error('Failed to update transcript:', error);
+      alert('Failed to update transcript. Please try again.');
+    } finally {
+      setUpdatingTranscript(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingTranscript(null);
+    setEditTranscriptText("");
+  };
+
+  const handleApproveSummary = async (visitId) => {
+    setApprovingSummary(visitId);
+    try {
+      // Get the summary data from the visitSummaries state
+      const summaryData = visitSummaries[visitId];
+      if (!summaryData) {
+        toast.error('No summary data found for this visit.');
+        return;
+      }
+
+      const requestBody = {
+        summary_text: summaryData.summary,
+        perception_tag: summaryData.perception_tag || [],
+        remedy: summaryData.remedy || ''
+      };
+
+      const response = await axiosInstance.put(`/visit/approved-summary/${visitId}`, requestBody);
+      toast.success('Summary approved successfully!');
+      
+      // Refresh the summaries to get updated approval status from backend
+      await fetchAllSummaries();
+    } catch (error) {
+      console.error('Failed to approve summary:', error);
+      toast.error('Failed to approve summary. Please try again.');
+    } finally {
+      setApprovingSummary(null);
+    }
+  };
+
+  const handleSendSummary = async (visitId, method = 'email') => {
+    setSendingNotification(visitId);
+    try {
+      const summaryData = visitSummaries[visitId];
+      if (!summaryData || !patient) {
+        toast.error('Missing summary or patient data.');
+        return;
+      }
+
+      const requestBody = {
+        patient_id: patient.id,
+        visit_id: visitId,
+        method: method, // 'email' or 'sms'
+        summary_text: summaryData.summary,
+        remedy: summaryData.remedy,
+        perception_tag: summaryData.perception_tag || []
+      };
+
+      // You'll need to replace this endpoint with your actual API endpoint
+      const response = await axiosInstance.post(`/visit/send-summary`, requestBody);
+      
+      toast.success(`Summary sent successfully via ${method.toUpperCase()}!`);
+    } catch (error) {
+      console.error(`Failed to send summary via ${method}:`, error);
+      toast.error(`Failed to send summary via ${method.toUpperCase()}. Please try again.`);
+    } finally {
+      setSendingNotification(null);
+    }
+  };
 
   useEffect(() => {
     if (id) fetchVisits();
-    // eslint-disable-next-line
   }, [id]);
+
+  useEffect(() => {
+    if (activeTab === 'summaries' && visits.length > 0) {
+      fetchAllSummaries();
+    }
+  }, [activeTab, visits]);
 
   const handleStartRecording = () => {
     setShowMicDialog(true);
@@ -102,22 +238,38 @@ export default function PatientDetailPage() {
 
   const confirmStartRecording = async () => {
     setShowMicDialog(false);
-    setUploadResult(null);
     setAudioBlob(null);
     setIsRecording(true);
     audioChunksRef.current = [];
+    
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new window.MediaRecorder(stream);
+      const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
+      
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
-      mediaRecorder.onstop = () => {
+      
+      mediaRecorder.onstop = async () => {
         const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         setAudioBlob(blob);
         stream.getTracks().forEach(track => track.stop());
+        
+        // Get S3 presigned URL
+        try {
+          const fileName = `audio${Date.now()}`;
+          const fileType = 'mp3';
+          const presignRes = await axiosInstance.post("/visit/get-presigned-url", { fileName, fileType });
+          setS3UploadUrl(presignRes.data.uploadUrl);
+          setS3FileKey(presignRes.data.fileKey);
+        } catch (err) {
+          setS3UploadUrl(null);
+          setS3FileKey(null);
+          alert('Failed to get S3 upload URL.');
+        }
       };
+      
       mediaRecorder.start();
     } catch (err) {
       alert("Microphone access denied or not available.");
@@ -125,45 +277,31 @@ export default function PatientDetailPage() {
     }
   };
 
-  const handleStopRecording = async () => {
+  const handleStopRecording = () => {
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      // Prepare for S3 upload: get presigned URL for mp3
-      try {
-        const fileName = `audio${Date.now()}`;
-        const fileType = 'mp3';
-        const presignRes = await axiosInstance.post("/visit/get-presigned-url", { fileName, fileType });
-        setS3UploadUrl(presignRes.data.uploadUrl);
-        setS3FileKey(presignRes.data.fileKey);
-      } catch (err) {
-        setS3UploadUrl(null);
-        setS3FileKey(null);
-        setUploadResult({ error: 'Failed to get S3 upload URL.' });
-      }
     }
   };
 
   const handleUploadAudio = async () => {
     if (!audioBlob || !s3UploadUrl || !s3FileKey) return;
     setUploading(true);
-    setUploadResult(null);
-    toast.loading('Uploading audio...');
+    
     try {
       // Convert webm to mp3 using ffmpeg.wasm
       const mp3Blob = await convertWebmToMp3(audioBlob);
-      // Step 2: Upload mp3 audio to S3 using plain axios (no Authorization header)
+      
+      // Upload mp3 audio to S3
       await axios.put(s3UploadUrl, mp3Blob, {
         headers: {
           'Content-Type': 'audio/mp3',
         }
       });
 
-      // Resolve patient id from loaded patient or route param
       const patientId = String(patient?.id ?? id ?? '');
       if (!patientId) {
-        toast.dismiss();
-        toast.error('Patient ID is missing.');
+        alert('Patient ID is missing.');
         setUploading(false);
         return;
       }
@@ -175,236 +313,413 @@ export default function PatientDetailPage() {
         status: 'pending',
         key: s3FileKey,
       };
-      console.log('POST /visit/start payload:', payload);
+      
       const apiRes = await axiosInstance.post('/visit/start', payload);
-      setUploadResult(apiRes.data);
-      toast.success('Audio uploaded successfully!');
-      // Refresh visit history
-      fetchVisits();
+      alert('Audio uploaded successfully!');
+      fetchVisits(); // Refresh visit history
+      setAudioBlob(null);
     } catch (err) {
-      setUploadResult({ error: 'Upload failed.' });
-      toast.error('Audio upload failed!');
+      alert('Audio upload failed!');
     } finally {
       setUploading(false);
-      toast.dismiss();
     }
   };
 
-  // const handleSaveNotes = async () => {
-  //   try {
-  //     await axiosInstance.post(`/patients/${params.id}/notes`, {
-  //       notes: consultationNotes,
-  //     })
-  //     console.log("Notes saved successfully")
-  //   } catch (error) {
-  //     console.error("Failed to save notes:", error)
-  //   }
-  // }
-
   return (
-    <div className="flex h-[calc(100vh-4rem)]">
-      {/* Left Sidebar - Patient Info */}
-      <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
-        <div className="p-6">
-          {/* Doctor Profile */}
-          <div className="text-center mb-6">
-            <Avatar className="h-20 w-20 mx-auto mb-4">
-              <AvatarImage src="/placeholder.svg?height=80&width=80" alt="Doctor" />
-              <AvatarFallback className="bg-gray-200 text-gray-600 text-lg">
-                <User className="h-8 w-8" />
-              </AvatarFallback>
-            </Avatar>
-            {/* TODO: Replace with logged-in doctor info from backend/auth context */}
-            <h3 className="text-lg font-semibold text-gray-900">{doctor.name}</h3>
-            <p className="text-sm text-green-600">{doctor.specialization}</p>
-          </div>
+    <div className="min-h-screen bg-gray-50">
+      <div className="flex">
+        {/* Left Sidebar */}
+        <div className="w-80 bg-white border-r border-gray-200 h-screen overflow-y-auto">
+          <div className="p-6">
+            {/* Doctor Profile */}
+            <div className="text-center mb-8">
+              <Avatar className="h-24 w-24 mx-auto mb-4">
+                <AvatarImage src="/placeholder.svg" />
+                <AvatarFallback className="bg-orange-200 text-orange-800 text-lg">
+                  <User className="h-8 w-8" />
+                </AvatarFallback>
+              </Avatar>
+              <h3 className="text-lg font-semibold text-gray-900">{doctor.name || 'Loading...'}</h3>
+              <p className="text-sm text-green-600 font-medium">{doctor.specialization || ''}</p>
+            </div>
 
-          {/* Patient Info */}
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="text-lg">Patient Info</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-500">Name</p>
-                  <p className="font-medium">{patient?.name || ''}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Age</p>
-                  <p className="font-medium">{patient?.age || ''}</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-500">Gender</p>
-                  <p className="font-medium">{patient?.gender || ''}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Contact</p>
-                  <p className="font-medium">{patient?.phone_number || patient?.contact || ''}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Medical History */}
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="text-lg">Medical History</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-sm">{patient?.medical_history || 'No medical history available.'}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Recent Consultations */}
-          {/* <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Recent Consultations</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {consultations.map((consultation) => (
-                  <div
-                    key={consultation.id}
-                    className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0"
-                  >
+            {/* Patient Info */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Patient Info</h3>
+              {patient ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="font-medium text-sm">{consultation.type}</p>
-                      <p className="text-xs text-gray-500">{consultation.date}</p>
+                      <p className="text-sm text-gray-500 mb-1">Name</p>
+                      <p className="font-medium text-gray-900">{patient.name || 'N/A'}</p>
                     </div>
-                    <div className="text-gray-400">→</div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1">Age</p>
+                      <p className="font-medium text-gray-900">{patient.age || 'N/A'}</p>
+                    </div>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card> */}
-        </div>
-      </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1">Gender</p>
+                      <p className="font-medium text-gray-900">{patient.gender || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1">Contact</p>
+                      <p className="font-medium text-gray-900">{patient.phone_number || patient.contact || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-gray-500">Loading patient information...</p>
+              )}
+            </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 bg-gray-50 overflow-y-auto">
-        <div className="p-8">
-          {/* Patient Header */}
-          <div className="flex items-center justify-between mb-6">
+            {/* Medical History */}
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">{patient?.name || ''}</h1>
-              <p className="text-green-600 mt-1">Patient ID: {patient?.id || ''}</p>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Medical History</h3>
+              {patient ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Medical History</p>
+                    <p className="font-medium text-gray-900">{patient.medical_history || 'No medical history available'}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-gray-500">Loading medical history...</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 p-8">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">{patient?.name || 'Loading...'}</h1>
+              <p className="text-green-600 font-medium mt-1">Patient ID: {patient?.id || id}</p>
             </div>
             <Button
               onClick={handleStartRecording}
-              className="bg-green-500 hover:bg-green-600 text-white font-medium px-6 flex items-center gap-2"
+              className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 font-medium"
             >
-              <Mic size={18} /> Start Recording
+              <Mic size={18} />
+              Start Recording
             </Button>
           </div>
 
-          {/* Microphone Confirm Dialog */}
-          <Dialog open={showMicDialog} onOpenChange={setShowMicDialog}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Allow Microphone Access?</DialogTitle>
-              </DialogHeader>
-              <div className="py-4">To record audio, we need access to your microphone. Start recording now?</div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowMicDialog(false)}>Cancel</Button>
-                <Button onClick={confirmStartRecording} className="bg-green-600 text-white">Start</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
           {/* Audio Recording Controls */}
           {isRecording && (
-            <div className="mb-6 flex items-center gap-4">
-              <span className="text-red-600 font-semibold">Recording...</span>
-              <Button onClick={handleStopRecording} className="bg-red-600 text-white flex items-center gap-2">
-                <StopCircle size={18} /> Stop Recording
-              </Button>
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                  <span className="text-red-700 font-semibold">Recording in progress...</span>
+                </div>
+                <Button 
+                  onClick={handleStopRecording} 
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  <StopCircle size={18} className="mr-2" />
+                  Stop Recording
+                </Button>
+              </div>
             </div>
           )}
+
           {audioBlob && !isRecording && (
-            <div className="mb-6 flex items-center gap-4">
-              <audio controls src={URL.createObjectURL(audioBlob)} />
-              <Button onClick={handleUploadAudio} disabled={uploading} className="bg-blue-600 text-white flex items-center gap-2">
-                <UploadCloud size={18} /> {uploading ? 'Uploading...' : 'Upload'}
-              </Button>
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <audio controls src={URL.createObjectURL(audioBlob)} className="h-10" />
+                </div>
+                <Button 
+                  onClick={handleUploadAudio} 
+                  disabled={uploading}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <UploadCloud size={18} className="mr-2" />
+                  {uploading ? 'Uploading...' : 'Upload Audio'}
+                </Button>
+              </div>
             </div>
           )}
-          {/* Visit History Table */}
-          <div>
-            <h2 className="text-2xl font-bold mb-4">Visit History</h2>
-            {visitsLoading ? (
-              <div>Loading visits...</div>
-            ) : (
-              <table className="min-w-full bg-white border border-gray-200 rounded-lg">
-                <thead>
-                  <tr>
-                    <th className="py-2 px-4 border-b text-left">Visit Date</th>
-                    <th className="py-2 px-4 border-b text-left">Status</th>
-                    <th className="py-2 px-4 border-b text-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visits.map((visit) => (
-                    <tr
-                      key={visit.id}
-                      className="cursor-pointer hover:bg-gray-100"
-                    >
-                      <td className="py-2 px-4 border-b align-middle">{new Date(visit.visit_date).toLocaleString()}</td>
-                      <td className="py-2 px-4 border-b align-middle">
-                        <select
-                          className="border rounded px-2 py-1 bg-white"
-                          value={visit.status}
-                          onChange={async (e) => {
-                            const newStatus = e.target.value;
-                            try {
-                              // Optionally show a loading toast
-                              toast.loading('Updating status...');
-                              await axiosInstance.post(`/visit/update-status/${visit.id}`, { status: newStatus });
-                              // Update local state
-                              setVisits((prev) => prev.map(v => v.id === visit.id ? { ...v, status: newStatus } : v));
-                              toast.success('Status updated!');
-                            } catch (err) {
-                              toast.error('Failed to update status');
-                            } finally {
-                              toast.dismiss();
-                            }
-                          }}
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="completed">Completed</option>
-                        </select>
-                      </td>
-                      <td className="py-2 px-4 border-b align-middle">
-                        <Button
-                          variant="link"
-                          className="text-blue-600 hover:underline p-0 h-auto min-w-0"
-                          onClick={e => {
-                            e.stopPropagation();
-                            router.push(`/dashboard/patients/${id}/visit?visitId=${visit.id}`);
-                          }}
-                        >
-                          View Transcript
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                  {visits.length === 0 && (
-                    <tr>
-                      <td colSpan={3} className="text-center py-4 text-gray-500">
-                        No visits found.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            )}
-          </div>
+
+          {/* Content Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
+              <TabsTrigger 
+                value="transcriptions"
+                className="data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm data-[state=active]:border-b-2 data-[state=active]:border-gray-900"
+              >
+                Transcriptions
+              </TabsTrigger>
+              <TabsTrigger 
+                value="summaries"
+                className="data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
+              >
+                Summaries
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="transcriptions" className="mt-0">
+              <div className="bg-white border border-gray-200 rounded-lg p-6 min-h-96">
+                {visitsLoading ? (
+                  <div className="flex items-center justify-center mt-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+                  </div>
+                ) : visits.length > 0 ? (
+                  <div className="space-y-6">
+                    {visits.map((visit) => (
+                      <Card key={visit.id} className="border-l-4 border-l-green-500">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-lg text-gray-900">
+                              Visit #{visit.id}
+                            </CardTitle>
+                            <div className="flex items-center gap-2">
+                              {visit.transcript_text && (
+                                <Button
+                                  onClick={() => handleUpdateTranscript(visit)}
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                                >
+                                  <Edit3 size={14} className="mr-1" />
+                                  Update
+                                </Button>
+                              )}
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                visit.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                visit.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {visit.status}
+                              </span>
+                              <span className="text-sm text-gray-500">
+                                {new Date(visit.visit_date).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                          {visit.language && (
+                            <p className="text-sm text-gray-600">
+                              Language: <span className="capitalize">{visit.language}</span>
+                            </p>
+                          )}
+                        </CardHeader>
+                        <CardContent>
+                          {visit.transcript_text ? (
+                            <div className="bg-gray-50 p-4 rounded-lg">
+                              <h4 className="font-medium text-gray-900 mb-2">Transcription:</h4>
+                              <p className="text-gray-700 whitespace-pre-wrap">{visit.transcript_text}</p>
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 italic">No transcription available for this visit.</p>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-center mt-12">No transcriptions available yet.</p>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="summaries" className="mt-0">
+              <div className="bg-white border border-gray-200 rounded-lg p-6 min-h-96">
+                {summariesLoading ? (
+                  <div className="flex items-center justify-center mt-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                    <span className="ml-2 text-gray-600">Loading summaries...</span>
+                  </div>
+                ) : visits.length > 0 ? (
+                  <div className="space-y-6">
+                    {visits.map((visit) => {
+                      const summaryData = visitSummaries[visit.id];
+                      return (
+                        <Card key={visit.id} className="border-l-4 border-l-blue-500">
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-lg text-gray-900">
+                                Visit #{visit.id} Summary
+                              </CardTitle>
+                              <div className="flex items-center gap-2">
+                                {summaryData && (summaryData.approved === false || summaryData.approved === undefined || summaryData.status !== 'approved') && (
+                                  <Button
+                                    onClick={() => handleApproveSummary(visit.id)}
+                                    disabled={approvingSummary === visit.id}
+                                    size="sm"
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                  >
+                                    <CheckCircle size={14} className="mr-1" />
+                                    {approvingSummary === visit.id ? 'Approving...' : 'Approve Summary'}
+                                  </Button>
+                                )}
+                                {summaryData && (summaryData.approved === true || summaryData.status === 'approved') && (
+                                  <>
+                                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                      Approved
+                                    </span>
+                                    <Button
+                                      onClick={() => handleSendSummary(visit.id, 'email')}
+                                      disabled={sendingNotification === visit.id}
+                                      size="sm"
+                                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                                    >
+                                      <Send size={14} className="mr-1" />
+                                      {sendingNotification === visit.id ? 'Sending...' : 'Send via Email'}
+                                    </Button>
+                                    <Button
+                                      onClick={() => handleSendSummary(visit.id, 'sms')}
+                                      disabled={sendingNotification === visit.id}
+                                      size="sm"
+                                      className="bg-green-600 hover:bg-green-700 text-white"
+                                    >
+                                      <Send size={14} className="mr-1" />
+                                      {sendingNotification === visit.id ? 'Sending...' : 'Send via SMS'}
+                                    </Button>
+                                  </>
+                                )}
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  visit.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                  visit.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {visit.status}
+                                </span>
+                                <span className="text-sm text-gray-500">
+                                  {new Date(visit.visit_date).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            {summaryData ? (
+                              <div className="space-y-4">
+                                {/* Summary */}
+                                <div className="bg-blue-50 p-4 rounded-lg">
+                                  <h4 className="font-medium text-gray-900 mb-2">Summary:</h4>
+                                  <p className="text-gray-700 leading-relaxed">{summaryData.summary}</p>
+                                </div>
+                                
+                                {/* Remedy */}
+                                {summaryData.remedy && (
+                                  <div className="bg-green-50 p-4 rounded-lg">
+                                    <h4 className="font-medium text-gray-900 mb-2">Remedy & Recommendations:</h4>
+                                    <p className="text-gray-700 leading-relaxed">{summaryData.remedy}</p>
+                                  </div>
+                                )}
+                                
+                                {/* Perception Tags */}
+                                {summaryData.perception_tag && summaryData.perception_tag.length > 0 && (
+                                  <div className="bg-purple-50 p-4 rounded-lg">
+                                    <h4 className="font-medium text-gray-900 mb-3">Key Topics:</h4>
+                                    <div className="flex flex-wrap gap-2">
+                                      {summaryData.perception_tag.map((tag, index) => (
+                                        <span 
+                                          key={index}
+                                          className="px-3 py-1 bg-purple-100 text-purple-800 text-sm rounded-full border border-purple-200"
+                                        >
+                                          {tag}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ) : visit.transcript_text ? (
+                              <div className="bg-yellow-50 p-4 rounded-lg">
+                                <p className="text-yellow-700">
+                                  <span className="font-medium">Processing:</span> Summary is being generated from the transcription.
+                                </p>
+                              </div>
+                            ) : (
+                              <p className="text-gray-500 italic">No summary available for this visit.</p>
+                            )}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-center mt-12">No summaries available yet.</p>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
+
+      {/* Microphone Permission Dialog */}
+      <Dialog open={showMicDialog} onOpenChange={setShowMicDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Allow Microphone Access</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-600">
+              To record audio consultation notes, we need access to your microphone. 
+              Would you like to start recording now?
+            </p>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowMicDialog(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={confirmStartRecording} 
+              className="bg-green-600 hover:bg-green-700 text-white flex-1"
+            >
+              Start Recording
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Update Transcript Dialog */}
+      <Dialog open={!!editingTranscript} onOpenChange={(open) => !open && handleCancelEdit()}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Update Transcript - Visit #{editingTranscript?.id}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-600 mb-4">
+              Edit the transcript text for this visit. Make your changes and click save to update.
+            </p>
+            <Textarea
+              value={editTranscriptText}
+              onChange={(e) => setEditTranscriptText(e.target.value)}
+              placeholder="Enter transcript text here..."
+              className="min-h-64 p-4 text-gray-600 placeholder:text-gray-400 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+            />
+            <p className="text-sm text-gray-500 mt-2">
+              Visit Date: {editingTranscript && new Date(editingTranscript.visit_date).toLocaleDateString()}
+            </p>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleCancelEdit}
+              disabled={updatingTranscript}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSaveTranscript}
+              disabled={updatingTranscript || !editTranscriptText.trim()}
+              className="bg-blue-600 hover:bg-blue-700 text-white flex-1"
+            >
+              {updatingTranscript ? 'Updating...' : 'Save Transcript'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

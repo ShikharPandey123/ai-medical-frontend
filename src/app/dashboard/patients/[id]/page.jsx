@@ -97,7 +97,7 @@ export default function PatientDetailPage() {
 
   const fetchVisitSummary = async (patientId, visitId) => {
     try {
-      const res = await axiosInstance.get(`/visit/${patientId}/${visitId}/summary`);
+      const res = await axiosInstance.get(`/visit/${id}/${visitId}/summary`);
       return res.data;
     } catch (err) {
       console.error(`Failed to fetch summary for visit ${visitId}:`, err);
@@ -166,24 +166,28 @@ export default function PatientDetailPage() {
   const handleApproveSummary = async (visitId) => {
     setApprovingSummary(visitId);
     try {
-      // Get the summary data from the visitSummaries state
       const summaryData = visitSummaries[visitId];
       if (!summaryData) {
         toast.error('No summary data found for this visit.');
         return;
       }
-
       const requestBody = {
         summary_text: summaryData.summary,
         perception_tag: summaryData.perception_tag || [],
         remedy: summaryData.remedy || ''
       };
-
-      const response = await axiosInstance.put(`/visit/approved-summary/${visitId}`, requestBody);
+      await axiosInstance.put(`/visit/approved-summary/${visitId}`, requestBody);
       toast.success('Summary approved successfully!');
-      
-      // Refresh the summaries to get updated approval status from backend
-      await fetchAllSummaries();
+      // Refetch the summary for this visit, but do NOT set status to approved
+      const updatedSummary = await fetchVisitSummary(id, visitId);
+      setVisitSummaries(prev => ({
+        ...prev,
+        [visitId]: {
+          ...(updatedSummary || prev[visitId]),
+          approved: true // Only for UI logic, not for status
+        }
+      }));
+      // Do NOT update visit status here
     } catch (error) {
       console.error('Failed to approve summary:', error);
       toast.error('Failed to approve summary. Please try again.');
@@ -200,23 +204,18 @@ export default function PatientDetailPage() {
         toast.error('Missing summary or patient data.');
         return;
       }
-
-      const requestBody = {
-        patient_id: patient.id,
-        visit_id: visitId,
-        method: method, // 'email' or 'sms'
-        summary_text: summaryData.summary,
-        remedy: summaryData.remedy,
-        perception_tag: summaryData.perception_tag || []
-      };
-
-      // You'll need to replace this endpoint with your actual API endpoint
-      const response = await axiosInstance.post(`/visit/send-summary`, requestBody);
-      
-      toast.success(`Summary sent successfully via ${method.toUpperCase()}!`);
+      // Call the new API endpoint
+      const response = await axiosInstance.get(`/visit/${id}/${visitId}/send-summary`, { method });
+      const msg = response?.data?.message || `Summary sent via ${method.toUpperCase()}`;
+      toast.success(msg);
+      // On success, set visit status to completed
+      setVisits(prevVisits => prevVisits.map(visit =>
+        visit.id === visitId ? { ...visit, status: 'completed' } : visit
+      ));
     } catch (error) {
       console.error(`Failed to send summary via ${method}:`, error);
       toast.error(`Failed to send summary via ${method.toUpperCase()}. Please try again.`);
+      // On failure, do NOT change status (remains pending)
     } finally {
       setSendingNotification(null);
     }
@@ -327,118 +326,119 @@ export default function PatientDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="flex">
-        {/* Left Sidebar */}
-        <div className="w-80 bg-white border-r border-gray-200 h-screen overflow-y-auto">
-          <div className="p-6">
+      <div className="flex flex-col lg:flex-row">
+        {/* Left Sidebar - Hidden on mobile, side-by-side on desktop */}
+        <div className="lg:w-80 bg-white border-r border-gray-200 lg:h-screen lg:overflow-y-auto">
+          <div className="p-4 lg:p-6">
             {/* Doctor Profile */}
-            <div className="text-center mb-8">
-              <Avatar className="h-24 w-24 mx-auto mb-4">
+            <div className="text-center mb-6 lg:mb-8">
+              <Avatar className="h-16 w-16 lg:h-24 lg:w-24 mx-auto mb-4">
                 <AvatarImage src="/placeholder.svg" />
                 <AvatarFallback className="bg-orange-200 text-orange-800 text-lg">
-                  <User className="h-8 w-8" />
+                  <User className="h-6 w-6 lg:h-8 lg:w-8" />
                 </AvatarFallback>
               </Avatar>
-              <h3 className="text-lg font-semibold text-gray-900">{doctor.name || 'Loading...'}</h3>
+              <h3 className="text-base lg:text-lg font-semibold text-gray-900">{doctor.name || 'Loading...'}</h3>
               <p className="text-sm text-green-600 font-medium">{doctor.specialization || ''}</p>
             </div>
 
             {/* Patient Info */}
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Patient Info</h3>
+            <div className="mb-6 lg:mb-8">
+              <h3 className="text-base lg:text-lg font-semibold text-gray-900 mb-4">Patient Info</h3>
               {patient ? (
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-gray-500 mb-1">Name</p>
-                      <p className="font-medium text-gray-900">{patient.name || 'N/A'}</p>
+                      <p className="font-medium text-gray-900 text-sm lg:text-base">{patient.name || 'N/A'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500 mb-1">Age</p>
-                      <p className="font-medium text-gray-900">{patient.age || 'N/A'}</p>
+                      <p className="font-medium text-gray-900 text-sm lg:text-base">{patient.age || 'N/A'}</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-gray-500 mb-1">Gender</p>
-                      <p className="font-medium text-gray-900">{patient.gender || 'N/A'}</p>
+                      <p className="font-medium text-gray-900 text-sm lg:text-base">{patient.gender || 'N/A'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500 mb-1">Contact</p>
-                      <p className="font-medium text-gray-900">{patient.phone_number || patient.contact || 'N/A'}</p>
+                      <p className="font-medium text-gray-900 text-sm lg:text-base">{patient.phone_number || patient.contact || 'N/A'}</p>
                     </div>
                   </div>
                 </div>
               ) : (
-                <p className="text-gray-500">Loading patient information...</p>
+                <p className="text-gray-500 text-sm">Loading patient information...</p>
               )}
             </div>
 
             {/* Medical History */}
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Medical History</h3>
+              <h3 className="text-base lg:text-lg font-semibold text-gray-900 mb-4">Medical History</h3>
               {patient ? (
                 <div className="space-y-4">
                   <div>
                     <p className="text-sm text-gray-500 mb-1">Medical History</p>
-                    <p className="font-medium text-gray-900">{patient.medical_history || 'No medical history available'}</p>
+                    <p className="font-medium text-gray-900 text-sm lg:text-base">{patient.medical_history || 'No medical history available'}</p>
                   </div>
                 </div>
               ) : (
-                <p className="text-gray-500">Loading medical history...</p>
+                <p className="text-gray-500 text-sm">Loading medical history...</p>
               )}
             </div>
           </div>
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 p-8">
+        <div className="flex-1 p-4 lg:p-8">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 lg:mb-8 gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">{patient?.name || 'Loading...'}</h1>
-              <p className="text-green-600 font-medium mt-1">Patient ID: {patient?.id || id}</p>
+              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">{patient?.name || 'Loading...'}</h1>
+              <p className="text-green-600 font-medium mt-1 text-sm lg:text-base">Patient ID: {patient?.id || id}</p>
             </div>
-            <Button
-              onClick={handleStartRecording}
-              className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 font-medium"
-            >
-              <Mic size={18} />
-              Start Recording
-            </Button>
+            {!isRecording ? (
+              <Button
+                onClick={handleStartRecording}
+                className="bg-green-500 hover:bg-green-600 text-white px-4 lg:px-6 py-2 rounded-lg flex items-center gap-2 font-medium text-sm lg:text-base"
+              >
+                <Mic size={16} className="lg:w-[18px] lg:h-[18px]" />
+                Start Recording
+              </Button>
+            ) : (
+              <Button 
+                onClick={handleStopRecording} 
+                className="bg-red-600 hover:bg-red-700 text-white px-4 lg:px-6 py-2 rounded-lg flex items-center gap-2 font-medium text-sm lg:text-base"
+              >
+                <StopCircle size={16} className="lg:w-[18px] lg:h-[18px]" />
+                Stop Recording
+              </Button>
+            )}
           </div>
 
-          {/* Audio Recording Controls */}
+          {/* Recording Status Indicator */}
           {isRecording && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                  <span className="text-red-700 font-semibold">Recording in progress...</span>
-                </div>
-                <Button 
-                  onClick={handleStopRecording} 
-                  className="bg-red-600 hover:bg-red-700 text-white"
-                >
-                  <StopCircle size={18} className="mr-2" />
-                  Stop Recording
-                </Button>
+            <div className="mb-4 lg:mb-6 p-3 lg:p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                <span className="text-red-700 font-semibold text-sm lg:text-base">Recording in progress...</span>
               </div>
             </div>
           )}
 
           {audioBlob && !isRecording && (
-            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center justify-between">
+            <div className="mb-4 lg:mb-6 p-3 lg:p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <audio controls src={URL.createObjectURL(audioBlob)} className="h-10" />
+                  <audio controls src={URL.createObjectURL(audioBlob)} className="h-8 lg:h-10 w-full sm:w-auto" />
                 </div>
                 <Button 
                   onClick={handleUploadAudio} 
                   disabled={uploading}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm lg:text-base"
                 >
-                  <UploadCloud size={18} className="mr-2" />
+                  <UploadCloud size={16} className="mr-2 lg:w-[18px] lg:h-[18px]" />
                   {uploading ? 'Uploading...' : 'Upload Audio'}
                 </Button>
               </div>
@@ -447,23 +447,23 @@ export default function PatientDetailPage() {
 
           {/* Content Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
+            <TabsList className="grid w-full max-w-sm lg:max-w-md grid-cols-2 mb-4 lg:mb-6">
               <TabsTrigger 
                 value="transcriptions"
-                className="data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm data-[state=active]:border-b-2 data-[state=active]:border-gray-900"
+                className="data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm data-[state=active]:border-b-2 data-[state=active]:border-gray-900 text-sm lg:text-base"
               >
                 Transcriptions
               </TabsTrigger>
               <TabsTrigger 
                 value="summaries"
-                className="data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
+                className="data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-sm lg:text-base"
               >
                 Summaries
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="transcriptions" className="mt-0">
-              <div className="bg-white border border-gray-200 rounded-lg p-6 min-h-96">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 lg:p-6 min-h-96">
                 {visitsLoading ? (
                   <div className="flex items-center justify-center mt-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
@@ -473,19 +473,19 @@ export default function PatientDetailPage() {
                     {visits.map((visit) => (
                       <Card key={visit.id} className="border-l-4 border-l-green-500">
                         <CardHeader className="pb-3">
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-lg text-gray-900">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <CardTitle className="text-base lg:text-lg text-gray-900">
                               Visit #{visit.id}
                             </CardTitle>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               {visit.transcript_text && (
                                 <Button
                                   onClick={() => handleUpdateTranscript(visit)}
                                   size="sm"
                                   variant="outline"
-                                  className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                                  className="text-blue-600 border-blue-200 hover:bg-blue-50 text-xs lg:text-sm"
                                 >
-                                  <Edit3 size={14} className="mr-1" />
+                                  <Edit3 size={12} className="mr-1 lg:w-[14px] lg:h-[14px]" />
                                   Update
                                 </Button>
                               )}
@@ -496,25 +496,25 @@ export default function PatientDetailPage() {
                               }`}>
                                 {visit.status}
                               </span>
-                              <span className="text-sm text-gray-500">
+                              <span className="text-xs lg:text-sm text-gray-500">
                                 {new Date(visit.visit_date).toLocaleDateString()}
                               </span>
                             </div>
                           </div>
                           {visit.language && (
-                            <p className="text-sm text-gray-600">
+                            <p className="text-xs lg:text-sm text-gray-600 mt-2">
                               Language: <span className="capitalize">{visit.language}</span>
                             </p>
                           )}
                         </CardHeader>
                         <CardContent>
                           {visit.transcript_text ? (
-                            <div className="bg-gray-50 p-4 rounded-lg">
-                              <h4 className="font-medium text-gray-900 mb-2">Transcription:</h4>
-                              <p className="text-gray-700 whitespace-pre-wrap">{visit.transcript_text}</p>
+                            <div className="bg-gray-50 p-3 lg:p-4 rounded-lg">
+                              <h4 className="font-medium text-gray-900 mb-2 text-sm lg:text-base">Transcription:</h4>
+                              <p className="text-gray-700 whitespace-pre-wrap text-sm lg:text-base">{visit.transcript_text}</p>
                             </div>
                           ) : (
-                            <p className="text-gray-500 italic">No transcription available for this visit.</p>
+                            <p className="text-gray-500 italic text-sm lg:text-base">No transcription available for this visit.</p>
                           )}
                         </CardContent>
                       </Card>
@@ -527,67 +527,69 @@ export default function PatientDetailPage() {
             </TabsContent>
 
             <TabsContent value="summaries" className="mt-0">
-              <div className="bg-white border border-gray-200 rounded-lg p-6 min-h-96">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 lg:p-6 min-h-96">
                 {summariesLoading ? (
                   <div className="flex items-center justify-center mt-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                    <span className="ml-2 text-gray-600">Loading summaries...</span>
+                    <span className="ml-2 text-gray-600 text-sm lg:text-base">Loading summaries...</span>
                   </div>
                 ) : visits.length > 0 ? (
-                  <div className="space-y-6">
+                  <div className="space-y-4 lg:space-y-6">
                     {visits.map((visit) => {
                       const summaryData = visitSummaries[visit.id];
+                      // Use visitSummaries for approval logic (show send buttons if approved), but status for badge
+                      const isLocallyApproved = visitSummaries[visit.id]?.approved === true;
+                      const isBackendApproved = visit.status === 'approved' || visit.status === 'completed';
                       return (
                         <Card key={visit.id} className="border-l-4 border-l-blue-500">
                           <CardHeader className="pb-3">
-                            <div className="flex items-center justify-between">
-                              <CardTitle className="text-lg text-gray-900">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <CardTitle className="text-base lg:text-lg text-gray-900">
                                 Visit #{visit.id} Summary
                               </CardTitle>
-                              <div className="flex items-center gap-2">
-                                {summaryData && (summaryData.approved === false || summaryData.approved === undefined || summaryData.status !== 'approved') && (
+                              <div className="flex flex-wrap items-center gap-2">
+                                {/* Approve button only if not locally approved and summary exists */}
+                                {!isLocallyApproved && summaryData && (
                                   <Button
-                                    onClick={() => handleApproveSummary(visit.id)}
+                                    type="button"
+                                    onClick={e => {
+                                      e.preventDefault();
+                                      handleApproveSummary(visit.id);
+                                    }}
                                     disabled={approvingSummary === visit.id}
                                     size="sm"
-                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                    className="bg-green-600 hover:bg-green-700 text-white text-xs lg:text-sm"
                                   >
-                                    <CheckCircle size={14} className="mr-1" />
+                                    <CheckCircle size={12} className="mr-1 lg:w-[14px] lg:h-[14px]" />
                                     {approvingSummary === visit.id ? 'Approving...' : 'Approve Summary'}
                                   </Button>
                                 )}
-                                {summaryData && (summaryData.approved === true || summaryData.status === 'approved') && (
-                                  <>
-                                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                      Approved
-                                    </span>
-                                    <Button
-                                      onClick={() => handleSendSummary(visit.id, 'email')}
-                                      disabled={sendingNotification === visit.id}
-                                      size="sm"
-                                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                                    >
-                                      <Send size={14} className="mr-1" />
-                                      {sendingNotification === visit.id ? 'Sending...' : 'Send via Email'}
-                                    </Button>
-                                    <Button
-                                      onClick={() => handleSendSummary(visit.id, 'sms')}
-                                      disabled={sendingNotification === visit.id}
-                                      size="sm"
-                                      className="bg-green-600 hover:bg-green-700 text-white"
-                                    >
-                                      <Send size={14} className="mr-1" />
-                                      {sendingNotification === visit.id ? 'Sending...' : 'Send via SMS'}
-                                    </Button>
-                                  </>
+                                {/* Show send buttons only if locally approved */}
+                                {isLocallyApproved && (
+                                  <Button
+                                    onClick={async () => {
+                                      // Send both email and sms
+                                      await handleSendSummary(visit.id, 'email');
+                                      await handleSendSummary(visit.id, 'sms');
+                                    }}
+                                    disabled={sendingNotification === visit.id}
+                                    size="sm"
+                                    className="bg-blue-600 hover:bg-blue-700 text-white flex items-center"
+                                  >
+                                    <Send size={14} className="mr-1" />
+                                    {sendingNotification === visit.id ? 'Sending...' : 'Send via Email & SMS'}
+                                  </Button>
                                 )}
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  visit.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                  visit.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                  'bg-gray-100 text-gray-800'
-                                }`}>
-                                  {visit.status}
-                                </span>
+                                {/* Status badge: show 'Approved' only if backend status is approved or completed */}
+                                {isBackendApproved ? (
+                                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    Approved
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                    pending
+                                  </span>
+                                )}
                                 <span className="text-sm text-gray-500">
                                   {new Date(visit.visit_date).toLocaleDateString()}
                                 </span>
@@ -614,7 +616,7 @@ export default function PatientDetailPage() {
                                 {/* Perception Tags */}
                                 {summaryData.perception_tag && summaryData.perception_tag.length > 0 && (
                                   <div className="bg-purple-50 p-4 rounded-lg">
-                                    <h4 className="font-medium text-gray-900 mb-3">Key Topics:</h4>
+                                    <h4 className="font-medium text-gray-900 mb-3">Tags</h4>
                                     <div className="flex flex-wrap gap-2">
                                       {summaryData.perception_tag.map((tag, index) => (
                                         <span 
@@ -659,7 +661,7 @@ export default function PatientDetailPage() {
           </DialogHeader>
           <div className="py-4">
             <p className="text-gray-600">
-              To record audio consultation notes, we need access to your microphone. 
+              To record audio, we need access to your microphone. 
               Would you like to start recording now?
             </p>
           </div>
@@ -683,37 +685,37 @@ export default function PatientDetailPage() {
 
       {/* Update Transcript Dialog */}
       <Dialog open={!!editingTranscript} onOpenChange={(open) => !open && handleCancelEdit()}>
-        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto mx-4">
           <DialogHeader>
-            <DialogTitle>Update Transcript - Visit #{editingTranscript?.id}</DialogTitle>
+            <DialogTitle className="text-lg lg:text-xl">Update Transcript - Visit #{editingTranscript?.id}</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            <p className="text-gray-600 mb-4">
+            <p className="text-gray-600 mb-4 text-sm lg:text-base">
               Edit the transcript text for this visit. Make your changes and click save to update.
             </p>
             <Textarea
               value={editTranscriptText}
               onChange={(e) => setEditTranscriptText(e.target.value)}
               placeholder="Enter transcript text here..."
-              className="min-h-64 p-4 text-gray-600 placeholder:text-gray-400 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+              className="min-h-48 lg:min-h-64 p-3 lg:p-4 text-gray-600 placeholder:text-gray-400 border-gray-200 focus:border-blue-500 focus:ring-blue-500 text-sm lg:text-base"
             />
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="text-xs lg:text-sm text-gray-500 mt-2">
               Visit Date: {editingTranscript && new Date(editingTranscript.visit_date).toLocaleDateString()}
             </p>
           </div>
-          <DialogFooter className="flex gap-2">
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
             <Button 
               variant="outline" 
               onClick={handleCancelEdit}
               disabled={updatingTranscript}
-              className="flex-1"
+              className="w-full sm:flex-1 text-sm lg:text-base"
             >
               Cancel
             </Button>
             <Button 
               onClick={handleSaveTranscript}
               disabled={updatingTranscript || !editTranscriptText.trim()}
-              className="bg-blue-600 hover:bg-blue-700 text-white flex-1"
+              className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:flex-1 text-sm lg:text-base"
             >
               {updatingTranscript ? 'Updating...' : 'Save Transcript'}
             </Button>

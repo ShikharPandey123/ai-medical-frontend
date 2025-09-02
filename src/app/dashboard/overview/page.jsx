@@ -57,7 +57,7 @@ export default function DashboardOverview() {
 
       {/* Search Bar and Add Button */}
       <div className="flex items-center justify-between mb-8">
-        <form onSubmit={handleSearch} className="relative flex-1 max-w-md">
+        {/* <form onSubmit={handleSearch} className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
             type="text"
@@ -66,14 +66,14 @@ export default function DashboardOverview() {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 bg-green-50 border-green-200 focus:border-green-300 focus:ring-green-200"
           />
-        </form>
+        </form> */}
 
-        <Button
+        {/* <Button
           onClick={handleAddNewPatient}
           className="bg-green-500 hover:bg-green-600 text-white font-medium px-6"
         >
           Add New Patient
-        </Button>
+        </Button> */}
       </div>
 
       {/* Statistics Cards */}
@@ -108,14 +108,14 @@ export default function DashboardOverview() {
       </div>
 
       {/* Start Recording Button */}
-      <div className="flex justify-start">
+      {/* <div className="flex justify-start">
         <Button
           onClick={handleStartRecording}
           className="bg-green-500 hover:bg-green-600 text-white font-medium px-8 py-3 text-lg"
         >
           Start Recording
         </Button>
-      </div>
+      </div> */}
     </div>
   )
 }

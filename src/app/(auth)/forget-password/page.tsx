@@ -6,18 +6,17 @@ import axiosInstance from "@/lib/axiosInstance";
 import Image from "next/image";
 import { toast } from "sonner";
 
-interface LoginFormData {
+interface ForgotPasswordFormData {
   email: string;
-  password: string;
 }
 
-export default function LoginPage() {
-  const [formData, setFormData] = useState<LoginFormData>({
+export default function ForgotPasswordPage() {
+  const [formData, setFormData] = useState<ForgotPasswordFormData>({
     email: "",
-    password: "",
   });
 
   const [loading, setLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
 
@@ -35,40 +34,67 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const response = await axiosInstance.post("/doctor/login-doctor", {
+      const response = await axiosInstance.post("/doctor/forget-password", {
         email: formData.email,
-        password: formData.password,
       });
-      console.log("Response headers:", response.headers);
-      const authHeader =
-        response.headers["authorization"] || response.headers["Authorization"];
-      let token = null;
-      console.log("Auth Header:", authHeader);
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        token = authHeader.replace("Bearer ", "");
-        localStorage.setItem("token", token);
-        console.log("Token stored:", token);
-      }
-      if (response.data.message === "Login successful") {
-        toast.success("Login successful! Redirecting to dashboard...");
-        setTimeout(() => {
-          router.push("/dashboard/overview");
-        }, 2500);
+      
+      if (response.data) {
+        setEmailSent(true);
+        toast.success("Reset link has been sent to your email!");
       }
     } catch (err: any) {
       setError(
         err.response?.data?.message ||
-          "Login failed. Please check your credentials and try again."
+          "Failed to send reset email. Please try again."
       );
-      toast.error("Login failed. Please try again.");
+      toast.error("Failed to send reset email. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleForgotPassword = () => {
-    router.push("/forget-password");
+  const handleBackToLogin = () => {
+    router.push("/login");
   };
+
+  if (emailSent) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-teal-50 to-cyan-100 flex items-center justify-center p-4">
+        <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl p-8 w-full max-w-md mx-auto text-center">
+          <div className="mb-6">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg
+                className="w-8 h-8 text-green-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">
+              Check Your Email
+            </h1>
+            <p className="text-gray-600">
+              If an account with that email exists, we've sent you a password reset link.
+            </p>
+          </div>
+          
+          <button
+            onClick={handleBackToLogin}
+            className="w-full bg-gradient-to-r from-teal-400 to-teal-500 hover:from-teal-500 hover:to-teal-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg"
+          >
+            Back to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 to-cyan-100 flex items-center justify-center p-4">
@@ -86,10 +112,15 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Right Side - Login Form */}
+        {/* Right Side - Forgot Password Form */}
         <div className="flex-1 max-w-md mx-auto">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-teal-600 mb-2">Login</h1>
+            <h1 className="text-4xl font-bold text-teal-600 mb-2">
+              Forgot Password
+            </h1>
+            <p className="text-gray-600">
+              Enter your email address and we'll send you a link to reset your password.
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -107,41 +138,10 @@ export default function LoginPage() {
                 name="email"
                 value={formData.email}
                 onChange={handleInputChange}
-                placeholder="Enter email"
+                placeholder="Enter your email address"
                 className="w-full px-4 py-3 border border-teal-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white/70 backdrop-blur-sm transition-all duration-200"
                 required
               />
-            </div>
-
-            {/* Password Field */}
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Password
-              </label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                placeholder="Enter password"
-                className="w-full px-4 py-3 border border-teal-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white/70 backdrop-blur-sm transition-all duration-200"
-                required
-              />
-            </div>
-
-            {/* Forgot Password Link */}
-            <div className="text-right">
-              <button
-                type="button"
-                onClick={handleForgotPassword}
-                className="text-sm text-teal-600 hover:text-teal-800 transition-colors duration-200"
-              >
-                Forgot Password?
-              </button>
             </div>
 
             {/* Error Message */}
@@ -151,7 +151,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Login Button */}
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
@@ -160,12 +160,23 @@ export default function LoginPage() {
               {loading ? (
                 <div className="flex items-center justify-center">
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  Logging in...
+                  Sending...
                 </div>
               ) : (
-                "LOGIN"
+                "Send Reset Link"
               )}
             </button>
+
+            {/* Back to Login */}
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={handleBackToLogin}
+                className="text-sm text-teal-600 hover:text-teal-800 transition-colors duration-200"
+              >
+                Back to Login
+              </button>
+            </div>
           </form>
         </div>
       </div>

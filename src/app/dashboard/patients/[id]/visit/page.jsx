@@ -164,6 +164,7 @@ export default function VisitDetailPage() {
                     perception_tag: tags,
                     remedy,
                   });
+                  console.log(res);
                   const srvSummary = res?.data?.summary;
                   if (srvSummary) {
                     setSummary(srvSummary.summary_text || "");

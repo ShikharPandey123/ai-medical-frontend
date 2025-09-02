@@ -91,12 +91,12 @@ const SplashScreen: FC<SplashScreenProps> = ({
         </div>
 
         {/* Bottom branding */}
-        <div
+        {/* <div
           className="absolute bottom-8 left-1/2 transform -translate-x-1/2 transition-opacity duration-1000 ease-out"
           style={{ opacity: textOpacity }}
         >
           <p className="text-xs opacity-60">Powered by Advanced Medical Technology</p>
-        </div>
+        </div> */}
       </div>
 
       {/* Minimal background pattern */}

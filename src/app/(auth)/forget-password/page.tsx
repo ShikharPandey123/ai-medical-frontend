@@ -2,9 +2,9 @@
 
 import { useState, ChangeEvent, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import axiosInstance from "@/lib/axiosInstance";
 import Image from "next/image";
 import { toast } from "sonner";
+import axiosInstance from "@/lib/axiosInstance";
 
 interface ForgotPasswordFormData {
   email: string;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, ChangeEvent, FormEvent } from "react";
+import { useState, useEffect, ChangeEvent, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axiosInstance from "@/lib/axiosInstance";
 import Image from "next/image";
@@ -11,7 +11,7 @@ interface ResetPasswordFormData {
   confirmPassword: string;
 }
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const [formData, setFormData] = useState<ResetPasswordFormData>({
     newPassword: "",
     confirmPassword: "",
@@ -283,5 +283,13 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }

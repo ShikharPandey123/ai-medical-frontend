@@ -46,7 +46,7 @@ const Sidebar: FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       <aside
         className={cn(
           "fixed left-0 top-16 h-[calc(100vh-4rem)] w-64",
-          "bg-medical-sidebar border-r border-medical-border-light",
+          "bg-white border-r border-gray-200",
           "overflow-y-auto z-50 transition-transform duration-300 ease-in-out",
           "md:translate-x-0",
           isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
@@ -68,8 +68,8 @@ const Sidebar: FC<{ isOpen?: boolean; onClose?: () => void }> = ({
                       className={cn(
                         "flex items-center space-x-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors",
                         isActive
-                          ? "bg-medical-sidebar-hover text-medical-text-primary shadow-sm"
-                          : "text-medical-text-secondary hover:bg-medical-sidebar-hover hover:text-medical-text-primary"
+                          ? "bg-gray-100 text-gray-900 shadow-sm"
+                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                       )}
                       onClick={onClose} // close mobile menu when link is clicked
                     >

@@ -5,9 +5,9 @@ import { useMemo, useState } from "react"
 import { Search, Plus, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog.tsx";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
 import { Label } from "../../components/ui/label";
-import axiosInstance from "../../lib/axiosInstance.ts";
+import axiosInstance from "../../lib/axiosInstance";
 
 type Patient = {
   id: string
@@ -67,6 +67,7 @@ function AddPatientDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
             <Label htmlFor="name">Name</Label>
             <Input
               id="name"
+              type="text"
               value={form.name ?? ""}
               onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
               placeholder="Sophia Clark"

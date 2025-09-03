@@ -16,6 +16,8 @@ function ResetPasswordForm() {
     newPassword: "",
     confirmPassword: "",
   });
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -205,7 +207,7 @@ function ResetPasswordForm() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* New Password Field */}
-            <div>
+            <div className="relative">
               <label
                 htmlFor="newPassword"
                 className="block text-sm font-medium text-gray-700 mb-2"
@@ -213,20 +215,37 @@ function ResetPasswordForm() {
                 New Password
               </label>
               <input
-                type="password"
+                type={showNewPassword ? "text" : "password"}
                 id="newPassword"
                 name="newPassword"
                 value={formData.newPassword}
                 onChange={handleInputChange}
                 placeholder="Enter new password"
-                className="w-full px-4 py-3 border border-teal-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white/70 backdrop-blur-sm transition-all duration-200"
+                className="w-full px-4 py-3 border border-teal-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white/70 backdrop-blur-sm transition-all duration-200 pr-12"
                 required
                 minLength={6}
               />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowNewPassword((prev) => !prev)}
+                className="absolute right-3 top-10 transform -translate-y-1/2 text-gray-400 hover:text-teal-600 focus:outline-none"
+                aria-label={showNewPassword ? "Hide password" : "Show password"}
+              >
+                {showNewPassword ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-5.523 0-10-4.477-10-10 0-1.657.402-3.22 1.125-4.575M15 12a3 3 0 11-6 0 3 3 0 016 0zm6.364-2.364A9.956 9.956 0 0021.9 12c0 5.523-4.477 10-10 10a9.956 9.956 0 01-4.364-.964M3 3l18 18" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm7.5 0c0 5.523-4.477 10-10 10S2.5 17.523 2.5 12 6.977 2 12.5 2s10 4.477 10 10z" />
+                  </svg>
+                )}
+              </button>
             </div>
 
             {/* Confirm Password Field */}
-            <div>
+            <div className="relative">
               <label
                 htmlFor="confirmPassword"
                 className="block text-sm font-medium text-gray-700 mb-2"
@@ -234,16 +253,33 @@ function ResetPasswordForm() {
                 Confirm New Password
               </label>
               <input
-                type="password"
+                type={showConfirmPassword ? "text" : "password"}
                 id="confirmPassword"
                 name="confirmPassword"
                 value={formData.confirmPassword}
                 onChange={handleInputChange}
                 placeholder="Confirm new password"
-                className="w-full px-4 py-3 border border-teal-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white/70 backdrop-blur-sm transition-all duration-200"
+                className="w-full px-4 py-3 border border-teal-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white/70 backdrop-blur-sm transition-all duration-200 pr-12"
                 required
                 minLength={6}
               />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowConfirmPassword((prev) => !prev)}
+                className="absolute right-3 top-10 transform -translate-y-1/2 text-gray-400 hover:text-teal-600 focus:outline-none"
+                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+              >
+                {showConfirmPassword ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-5.523 0-10-4.477-10-10 0-1.657.402-3.22 1.125-4.575M15 12a3 3 0 11-6 0 3 3 0 016 0zm6.364-2.364A9.956 9.956 0 0021.9 12c0 5.523-4.477 10-10 10a9.956 9.956 0 01-4.364-.964M3 3l18 18" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm7.5 0c0 5.523-4.477 10-10 10S2.5 17.523 2.5 12 6.977 2 12.5 2s10 4.477 10 10z" />
+                  </svg>
+                )}
+              </button>
             </div>
 
             {/* Error Message */}

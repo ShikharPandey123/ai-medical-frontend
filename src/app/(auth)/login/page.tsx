@@ -71,6 +71,10 @@ export default function LoginPage() {
     router.push("/forget-password");
   };
 
+  const handleRegister = () => {
+    router.push("/register");
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 to-cyan-100 flex items-center justify-center p-4">
       <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl p-8 w-full max-w-5xl flex items-center gap-8">
@@ -182,6 +186,31 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+
+          {/* Register Section */}
+          <div className="mt-6 text-center">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">or</span>
+              </div>
+            </div>
+            
+            <div className="mt-6">
+              <p className="text-sm text-gray-600 mb-3">
+                New user? Create an account
+              </p>
+              <button
+                type="button"
+                onClick={handleRegister}
+                className="w-full bg-gradient-to-r from-teal-400 to-teal-500 hover:from-teal-500 hover:to-teal-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg"
+              >
+                REGISTER
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

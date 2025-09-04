@@ -325,7 +325,7 @@ export default function PatientDetailPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen mt-14 bg-gray-50">
       <div className="flex flex-col lg:flex-row">
         {/* Left Sidebar - Hidden on mobile, side-by-side on desktop */}
         <div className="lg:w-80 bg-white border-r border-gray-200 lg:h-screen lg:overflow-y-auto">

@@ -85,7 +85,7 @@ export default function LoginPage() {
               src="/assets/images/black-stethoscope.png"
               alt="Stethoscope"
               fill
-              className="object-contain"
+              className="object-contain drop-shadow-2xl filter contrast-110 brightness-105"
               priority
             />
           </div>

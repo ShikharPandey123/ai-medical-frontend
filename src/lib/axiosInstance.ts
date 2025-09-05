@@ -3,8 +3,8 @@ import type { InternalAxiosRequestConfig } from "axios";
 
 const axiosInstance: AxiosInstance = axios.create({
   // baseURL: "http://localhost:8080/api/v1",
- baseURL: "http://34.193.93.242:8080/api/v1",
-//baseURL:"https://ai-medical-back-end.onrender.com/api/v1",
+ //baseURL: "http://34.193.93.242:8080/api/v1",
+baseURL:"https://ai-medical-back-end.onrender.com/api/v1",
   withCredentials: true,
   timeout: 10000, // 10 second timeout
   headers: {

@@ -172,12 +172,13 @@ function AddPatientDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           <div className="grid gap-2">
             <Label htmlFor="medical_history">Medical History</Label>
             <Textarea
-              id="medical_history"
-              value={form.medical_history}
-              onChange={(e) => setForm((s) => ({ ...s, medical_history: e.target.value }))}
-              placeholder="Enter medical history (optional)"
-              rows={3}
-            />
+  id="medical_history"
+  className=""
+  value={form.medical_history}
+  onChange={(e) => setForm((s) => ({ ...s, medical_history: e.target.value }))}
+  placeholder="Enter medical history (optional)"
+  rows={3}
+/>
           </div>
         </div>
         <DialogFooter className="gap-2">

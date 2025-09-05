@@ -7,6 +7,9 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
 import { Label } from "../../components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
+import { Textarea } from "../../components/ui/textarea";
+import { toast } from "sonner";
 import axiosInstance from "../../lib/axiosInstance";
 
 type Patient = {
@@ -33,73 +36,147 @@ const fetcher = async (url: string) => {
 function AddPatientDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const [form, setForm] = useState({
     name: "",
-    age: undefined as number | undefined,
-    condition: "",
-    lastVisit: "",
+    email: "",
+    dob: "",
+    age: "",
+    gender: "",
+    phone_number: "",
+    medical_history: "",
   });
   const [submitting, setSubmitting] = useState(false);
 
   const onSubmit = async () => {
-    if (!form.name || !form.age || !form.condition) return;
+    // Validate required fields
+    if (!form.name || !form.email || !form.dob || !form.age || !form.gender || !form.phone_number) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form.email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    // Validate phone number (basic validation for 10 digits)
+    if (!/^\d{10}$/.test(form.phone_number)) {
+      toast.error("Please enter a valid 10-digit phone number");
+      return;
+    }
+
     setSubmitting(true);
     try {
       await axiosInstance.post("/doctor/create-patient", form);
+      
       // Revalidate the patients list
       await mutate("/patient/get-all-patients");
+      
+      // Show success toast
+      toast.success("Patient added successfully!");
+      
       // Close dialog and reset form
       onOpenChange(false);
-      setForm({ name: "", age: undefined, condition: "", lastVisit: "" });
+      setForm({ 
+        name: "", 
+        email: "", 
+        dob: "", 
+        age: "", 
+        gender: "", 
+        phone_number: "", 
+        medical_history: "" 
+      });
     } catch (error) {
-      // You could add toast notification here
+      console.error("Error adding patient:", error);
+      toast.error("Failed to add patient. Please try again.");
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add New Patient</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">Name *</Label>
             <Input
               id="name"
               type="text"
-              value={form.name ?? ""}
+              value={form.name}
               onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
-              placeholder="Sophia Clark"
+              placeholder="John Doe"
             />
           </div>
+          
           <div className="grid gap-2">
-            <Label htmlFor="age">Age</Label>
+            <Label htmlFor="email">Email *</Label>
+            <Input
+              id="email"
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))}
+              placeholder="patient@email.com"
+            />
+          </div>
+          
+          <div className="grid gap-2">
+            <Label htmlFor="dob">Date of Birth *</Label>
+            <Input
+              id="dob"
+              type="date"
+              value={form.dob}
+              onChange={(e) => setForm((s) => ({ ...s, dob: e.target.value }))}
+            />
+          </div>
+          
+          <div className="grid gap-2">
+            <Label htmlFor="age">Age *</Label>
             <Input
               id="age"
-              type="number"
-              min={0}
-              value={form.age ?? ""}
-              onChange={(e) => setForm((s) => ({ ...s, age: Number(e.target.value) }))}
-              placeholder="35"
+              type="text"
+              value={form.age}
+              onChange={(e) => setForm((s) => ({ ...s, age: e.target.value }))}
+              placeholder="45"
             />
           </div>
+          
           <div className="grid gap-2">
-            <Label htmlFor="condition">Condition (Tag)</Label>
+            <Label htmlFor="gender">Gender *</Label>
+            <Select value={form.gender} onValueChange={(value) => setForm((s) => ({ ...s, gender: value }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select gender" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="male">Male</SelectItem>
+                <SelectItem value="female">Female</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="grid gap-2">
+            <Label htmlFor="phone_number">Phone Number *</Label>
             <Input
-              id="condition"
-              value={form.condition ?? ""}
-              onChange={(e) => setForm((s) => ({ ...s, condition: e.target.value }))}
-              placeholder="Diabetes"
+              id="phone_number"
+              type="tel"
+              value={form.phone_number}
+              onChange={(e) => setForm((s) => ({ ...s, phone_number: e.target.value }))}
+              placeholder="9999999999"
             />
           </div>
+          
           <div className="grid gap-2">
-            <Label htmlFor="lastVisit">Last Visit</Label>
-            <Input
-              id="lastVisit"
-              type="date"
-              value={form.lastVisit ?? ""}
-              onChange={(e) => setForm((s) => ({ ...s, lastVisit: e.target.value }))}
+            <Label htmlFor="medical_history">Medical History</Label>
+            <Textarea
+              id="medical_history"
+              value={form.medical_history}
+              onChange={(e) => setForm((s) => ({ ...s, medical_history: e.target.value }))}
+              placeholder="Enter medical history (optional)"
+              rows={3}
             />
           </div>
         </div>

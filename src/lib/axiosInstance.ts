@@ -4,9 +4,9 @@ import type { InternalAxiosRequestConfig } from "axios";
 const axiosInstance: AxiosInstance = axios.create({
   // baseURL: "http://localhost:8080/api/v1",
   //baseURL: "http://54.210.5.43:8080/api/v1",
-  baseURL: "https://54.210.5.43/api/v1",
+  baseURL: "https://admin.saramedico.com/api/v1",
   withCredentials: true,
-  timeout: 10000, // 10 second timeout
+  timeout: 5 * 60 * 1000, // 5 minute timeout
   headers: {
     "Content-Type": "application/json",
   },

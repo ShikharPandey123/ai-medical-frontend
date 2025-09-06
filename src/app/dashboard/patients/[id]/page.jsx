@@ -13,9 +13,11 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Label } from "@/components/ui/label"
 import axios from "axios"
 import axiosInstance from "../../../../lib/axiosInstance"
 import { toast } from "sonner"
@@ -37,6 +39,15 @@ export default function PatientDetailPage() {
   const [updatingTranscript, setUpdatingTranscript] = useState(false);
   const [approvingSummary, setApprovingSummary] = useState(null);
   const [sendingNotification, setSendingNotification] = useState(null);
+
+  // Edit Summary Dialog State
+  const [editingSummary, setEditingSummary] = useState(null);
+  const [editSummaryData, setEditSummaryData] = useState({
+    summary: '',
+    remedy: '',
+    perception_tag: []
+  });
+  const [updatingSummary, setUpdatingSummary] = useState(false);
 
   // Audio recording state
   const [showMicDialog, setShowMicDialog] = useState(false);
@@ -146,13 +157,13 @@ export default function PatientDetailPage() {
             : visit
         )
       );
-      
-      alert('Transcript updated successfully!');
+
+      toast.success('Transcript updated successfully!');
       setEditingTranscript(null);
       setEditTranscriptText("");
     } catch (error) {
       console.error('Failed to update transcript:', error);
-      alert('Failed to update transcript. Please try again.');
+      toast.error('Failed to update transcript. Please try again.');
     } finally {
       setUpdatingTranscript(false);
     }
@@ -161,6 +172,71 @@ export default function PatientDetailPage() {
   const handleCancelEdit = () => {
     setEditingTranscript(null);
     setEditTranscriptText("");
+  };
+
+  // New function to handle "Update and Approve" button
+  const handleUpdateAndApprove = (visit) => {
+    const summaryData = visitSummaries[visit.id];
+    if (summaryData) {
+      setEditingSummary(visit);
+      setEditSummaryData({
+        summary: summaryData.summary || '',
+        remedy: summaryData.remedy || '',
+        perception_tag: summaryData.perception_tag || []
+      });
+    } else {
+      toast.error('No summary data found for this visit.');
+    }
+  };
+
+  // Function to handle tag input changes
+  const handleTagInput = (value) => {
+    const tags = value.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+    setEditSummaryData(prev => ({
+      ...prev,
+      perception_tag: tags
+    }));
+  };
+
+  // Function to save updated summary
+  const handleSaveSummary = async () => {
+    if (!editingSummary) return;
+    
+    setUpdatingSummary(true);
+    try {
+      const requestBody = {
+        summary_text: editSummaryData.summary,
+        perception_tag: editSummaryData.perception_tag,
+        remedy: editSummaryData.remedy
+      };
+      
+      await axiosInstance.put(`/visit/approved-summary/${editingSummary.id}`, requestBody);
+      toast.success('Summary updated and approved successfully!');
+      
+      // Update local state
+      setVisitSummaries(prev => ({
+        ...prev,
+        [editingSummary.id]: {
+          ...editSummaryData,
+          approved: true
+        }
+      }));
+      
+      // Close dialog
+      setEditingSummary(null);
+      setEditSummaryData({ summary: '', remedy: '', perception_tag: [] });
+      
+    } catch (error) {
+      console.error('Failed to update summary:', error);
+      toast.error('Failed to update summary. Please try again.');
+    } finally {
+      setUpdatingSummary(false);
+    }
+  };
+
+  const handleCancelSummaryEdit = () => {
+    setEditingSummary(null);
+    setEditSummaryData({ summary: '', remedy: '', perception_tag: [] });
   };
 
   const handleApproveSummary = async (visitId) => {
@@ -265,13 +341,13 @@ export default function PatientDetailPage() {
         } catch (err) {
           setS3UploadUrl(null);
           setS3FileKey(null);
-          alert('Failed to get S3 upload URL.');
+          toast.error('Failed to get S3 upload URL.');
         }
       };
       
       mediaRecorder.start();
     } catch (err) {
-      alert("Microphone access denied or not available.");
+      toast.error("Microphone access denied or not available.");
       setIsRecording(false);
     }
   };
@@ -284,45 +360,47 @@ export default function PatientDetailPage() {
   };
 
   const handleUploadAudio = async () => {
-    if (!audioBlob || !s3UploadUrl || !s3FileKey) return;
-    setUploading(true);
-    
-    try {
-      // Convert webm to mp3 using ffmpeg.wasm
-      const mp3Blob = await convertWebmToMp3(audioBlob);
-      
-      // Upload mp3 audio to S3
-      await axios.put(s3UploadUrl, mp3Blob, {
-        headers: {
-          'Content-Type': 'audio/mp3',
-        }
-      });
+  if (!audioBlob || !s3UploadUrl || !s3FileKey) return;
+  setUploading(true);
 
-      const patientId = String(patient?.id ?? id ?? '');
-      if (!patientId) {
-        alert('Patient ID is missing.');
-        setUploading(false);
-        return;
-      }
+  try {
+    // Convert webm → mp3
+    const mp3Blob = await convertWebmToMp3(audioBlob);
+    const mp3File = new File([mp3Blob], `audio-${Date.now()}.mp3`, { type: "audio/mp3" });
 
-      const payload = {
-        patient_id: patientId,
-        visit_date: new Date().toISOString(),
-        audio_file_url: s3FileKey,
-        status: 'pending',
-        key: s3FileKey,
-      };
-      
-      const apiRes = await axiosInstance.post('/visit/start', payload);
-      alert('Audio uploaded successfully!');
-      fetchVisits(); // Refresh visit history
-      setAudioBlob(null);
-    } catch (err) {
-      alert('Audio upload failed!');
-    } finally {
-      setUploading(false);
-    }
-  };
+    // Upload with axios
+    await axios.put(s3UploadUrl, mp3File, {
+      headers: { "Content-Type": "audio/mp3" },
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      onUploadProgress: (e) => {
+        const percent = Math.round((e.loaded * 100) / e.total);
+        console.log(`Upload progress: ${percent}%`);
+      },
+    });
+
+    // API call after upload
+    const patientId = String(patient?.id ?? id ?? "");
+    const payload = {
+      patient_id: patientId,
+      visit_date: new Date().toISOString(),
+      audio_file_url: s3FileKey,
+      status: "pending",
+      key: s3FileKey,
+    };
+
+    await axiosInstance.post("/visit/start", payload);
+    toast.success("Audio uploaded successfully!");
+    fetchVisits();
+    setAudioBlob(null);
+  } catch (err) {
+    console.error("Upload error:", err);
+    toast.error("Audio upload failed!");
+  } finally {
+    setUploading(false);
+  }
+};
+
 
   return (
     <div className="min-h-screen mt-14 bg-gray-50">
@@ -375,11 +453,11 @@ export default function PatientDetailPage() {
 
             {/* Medical History */}
             <div>
-              <h3 className="text-base lg:text-lg font-semibold text-gray-900 mb-4">Medical History</h3>
+              <h3 className="text-base lg:text-lg text-gray-500 mb-1">Medical History</h3>
               {patient ? (
                 <div className="space-y-4">
                   <div>
-                    <p className="text-sm text-gray-500 mb-1">Medical History</p>
+                    
                     <p className="font-medium text-gray-900 text-sm lg:text-base">{patient.medical_history || 'No medical history available'}</p>
                   </div>
                 </div>
@@ -470,55 +548,66 @@ export default function PatientDetailPage() {
                   </div>
                 ) : visits.length > 0 ? (
                   <div className="space-y-6">
-                    {visits.map((visit) => (
-                      <Card key={visit.id} className="border-l-4 border-l-green-500">
-                        <CardHeader className="pb-3">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <CardTitle className="text-base lg:text-lg text-gray-900">
-                              Visit #{visit.id}
-                            </CardTitle>
-                            <div className="flex flex-wrap items-center gap-2">
-                              {visit.transcript_text && (
-                                <Button
-                                  onClick={() => handleUpdateTranscript(visit)}
-                                  size="sm"
-                                  variant="outline"
-                                  className="text-blue-600 border-blue-200 hover:bg-blue-50 text-xs lg:text-sm"
-                                >
-                                  <Edit3 size={12} className="mr-1 lg:w-[14px] lg:h-[14px]" />
-                                  Update
-                                </Button>
-                              )}
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                visit.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                visit.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-gray-100 text-gray-800'
-                              }`}>
-                                {visit.status}
-                              </span>
-                              <span className="text-xs lg:text-sm text-gray-500">
-                                {new Date(visit.visit_date).toLocaleDateString()}
-                              </span>
+                    {visits.map((visit) => {
+                      const summaryData = visitSummaries[visit.id];
+                      return (
+                        <Card key={visit.id} className="border-l-4 border-l-green-500">
+                          <CardHeader className="pb-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <CardTitle className="text-base lg:text-lg text-gray-900">
+                                Visit #{visit.id}
+                              </CardTitle>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {visit.transcript_text && (
+                                  <Button
+                                    onClick={() => handleUpdateTranscript(visit)}
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-blue-600 border-blue-200 hover:bg-blue-50 text-xs lg:text-sm"
+                                  >
+                                    <Edit3 size={12} className="mr-1 lg:w-[14px] lg:h-[14px]" />
+                                     Approve Transcript
+                                  </Button>
+                                )}
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  visit.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                  visit.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {visit.status}
+                                </span>
+                                <span className="text-xs lg:text-sm text-gray-500">
+                                  {new Date(visit.visit_date).toLocaleDateString()}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                          {visit.language && (
-                            <p className="text-xs lg:text-sm text-gray-600 mt-2">
-                              Language: <span className="capitalize">{visit.language}</span>
-                            </p>
-                          )}
-                        </CardHeader>
-                        <CardContent>
-                          {visit.transcript_text ? (
-                            <div className="bg-gray-50 p-3 lg:p-4 rounded-lg">
-                              <h4 className="font-medium text-gray-900 mb-2 text-sm lg:text-base">Transcription:</h4>
-                              <p className="text-gray-700 whitespace-pre-wrap text-sm lg:text-base">{visit.transcript_text}</p>
-                            </div>
-                          ) : (
-                            <p className="text-gray-500 italic text-sm lg:text-base">No transcription available for this visit.</p>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
+                            {visit.language && (
+                              <p className="text-xs lg:text-sm text-gray-600 mt-2">
+                                Language: <span className="capitalize">{visit.language}</span>
+                              </p>
+                            )}
+                          </CardHeader>
+                          <CardContent>
+                            {visit.transcript_text ? (
+                              <div className="space-y-4">
+                                <div className="bg-gray-50 p-3 lg:p-4 rounded-lg">
+                                  <h4 className="font-medium text-gray-900 mb-2 text-sm lg:text-base">Transcription:</h4>
+                                  <p className="text-gray-700 whitespace-pre-wrap text-sm lg:text-base">{visit.transcript_text}</p>
+                                </div>
+                                {/* Update and Approve Button */}
+                                {summaryData && (
+                                  <div className="flex justify-end">
+                                    
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-gray-500 italic text-sm lg:text-base">No transcription available for this visit.</p>
+                            )}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-gray-500 text-center mt-12">No transcriptions available yet.</p>
@@ -548,20 +637,16 @@ export default function PatientDetailPage() {
                                 Visit #{visit.id} Summary
                               </CardTitle>
                               <div className="flex flex-wrap items-center gap-2">
-                                {/* Approve button only if not locally approved and summary exists */}
+                                {/* Edit Summary button - always show if summary exists and not locally approved */}
                                 {!isLocallyApproved && summaryData && (
                                   <Button
                                     type="button"
-                                    onClick={e => {
-                                      e.preventDefault();
-                                      handleApproveSummary(visit.id);
-                                    }}
-                                    disabled={approvingSummary === visit.id}
+                                    onClick={() => handleUpdateAndApprove(visit)}
                                     size="sm"
-                                    className="bg-green-600 hover:bg-green-700 text-white text-xs lg:text-sm"
+                                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs lg:text-sm"
                                   >
-                                    <CheckCircle size={12} className="mr-1 lg:w-[14px] lg:h-[14px]" />
-                                    {approvingSummary === visit.id ? 'Approving...' : 'Approve Summary'}
+                                    <Edit3 size={12} className="mr-1 lg:w-[14px] lg:h-[14px]" />
+                                    Edit Summary
                                   </Button>
                                 )}
                                 {/* Show send buttons only if locally approved */}
@@ -580,14 +665,18 @@ export default function PatientDetailPage() {
                                     {sendingNotification === visit.id ? 'Sending...' : 'Send via Email & SMS'}
                                   </Button>
                                 )}
-                                {/* Status badge: show 'Approved' only if backend status is approved or completed */}
-                                {isBackendApproved ? (
+                                {/* Status badge */}
+                                {isLocallyApproved ? (
                                   <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                     Approved
                                   </span>
-                                ) : (
+                                ) : summaryData ? (
                                   <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                     pending
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    no summary
                                   </span>
                                 )}
                                 <span className="text-sm text-gray-500">
@@ -715,9 +804,102 @@ export default function PatientDetailPage() {
             <Button 
               onClick={handleSaveTranscript}
               disabled={updatingTranscript || !editTranscriptText.trim()}
-              className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:flex-1 text-sm lg:text-base"
+              className="bg-green-600 hover:bg-green-700 text-white w-full sm:flex-1 text-sm lg:text-base"
             >
               {updatingTranscript ? 'Updating...' : 'Save Transcript'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Summary Dialog */}
+      <Dialog open={!!editingSummary} onOpenChange={(open) => !open && handleCancelSummaryEdit()}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto mx-4">
+          <DialogHeader>
+            <DialogTitle className="text-lg lg:text-xl">Edit Summary - Visit #{editingSummary?.id}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-6">
+            <p className="text-gray-600 text-sm lg:text-base">
+              Edit the summary details below. All changes will be saved and the summary will be approved.
+            </p>
+            
+            {/* Summary Section */}
+            <div className="space-y-2">
+              <Label htmlFor="summary" className="text-sm font-medium text-gray-700">
+                Summary
+              </Label>
+              <Textarea
+                id="summary"
+                value={editSummaryData.summary}
+                onChange={(e) => setEditSummaryData(prev => ({ ...prev, summary: e.target.value }))}
+                placeholder="Enter summary text here..."
+                className="min-h-32 p-3 text-gray-600 placeholder:text-gray-400 border-gray-200 focus:border-blue-500 focus:ring-blue-500 text-sm"
+              />
+            </div>
+
+            {/* Remedy Section */}
+            <div className="space-y-2">
+              <Label htmlFor="remedy" className="text-sm font-medium text-gray-700">
+                Remedy & Recommendations
+              </Label>
+              <Textarea
+                id="remedy"
+                value={editSummaryData.remedy}
+                onChange={(e) => setEditSummaryData(prev => ({ ...prev, remedy: e.target.value }))}
+                placeholder="Enter remedy and recommendations here..."
+                className="min-h-32 p-3 text-gray-600 placeholder:text-gray-400 border-gray-200 focus:border-blue-500 focus:ring-blue-500 text-sm"
+              />
+            </div>
+
+            {/* Tags Section */}
+            <div className="space-y-2">
+              <Label htmlFor="tags" className="text-sm font-medium text-gray-700">
+                Tags
+              </Label>
+              <Input
+                id="tags"
+                value={editSummaryData.perception_tag.join(', ')}
+                onChange={(e) => handleTagInput(e.target.value)}
+                placeholder="Enter tags separated by commas (e.g., diabetes, hypertension, follow-up)"
+                className="p-3 text-gray-600 placeholder:text-gray-400 border-gray-200 focus:border-blue-500 focus:ring-blue-500 text-sm"
+              />
+              <p className="text-xs text-gray-500">
+                Separate tags with commas. Current tags: {editSummaryData.perception_tag.length}
+              </p>
+              {editSummaryData.perception_tag.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {editSummaryData.perception_tag.map((tag, index) => (
+                    <span 
+                      key={index}
+                      className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full border border-purple-200"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <p className="text-xs text-gray-500 mt-4">
+              Visit Date: {editingSummary && new Date(editingSummary.visit_date).toLocaleDateString()}
+            </p>
+          </div>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleCancelSummaryEdit}
+              disabled={updatingSummary}
+              className="w-full sm:flex-1 text-sm lg:text-base"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSaveSummary}
+              disabled={updatingSummary || !editSummaryData.summary.trim()}
+              className="bg-green-600 hover:bg-green-700 text-white w-full sm:flex-1 text-sm lg:text-base"
+            >
+              <CheckCircle size={16} className="mr-2" />
+              {updatingSummary ? 'Updating...' : 'Update & Approve Summary'}
             </Button>
           </DialogFooter>
         </DialogContent>

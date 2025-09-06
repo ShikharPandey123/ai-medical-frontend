@@ -23,6 +23,7 @@ type Patient = {
   dob?: string
   gender?: string
   medical_history?: string
+  createdAt?: string // Add this field to track creation time
 }
 
 type GetPatientsResponse = { data: { patients: Patient[] } }
@@ -32,6 +33,22 @@ const fetcher = async (url: string) => {
   const response = await axiosInstance.get(url)
   return response.data
 }
+
+// Function to calculate age from date of birth
+const calculateAge = (dob: string): string => {
+  if (!dob) return "";
+  
+  const today = new Date();
+  const birthDate = new Date(dob);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  
+  return age.toString();
+};
 
 function AddPatientDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const [form, setForm] = useState({
@@ -44,6 +61,16 @@ function AddPatientDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
     medical_history: "",
   });
   const [submitting, setSubmitting] = useState(false);
+
+  // Handle DOB change and auto-calculate age
+  const handleDobChange = (dob: string) => {
+    const calculatedAge = calculateAge(dob);
+    setForm((s) => ({ 
+      ...s, 
+      dob: dob,
+      age: calculatedAge
+    }));
+  };
 
   const onSubmit = async () => {
     // Validate required fields
@@ -67,10 +94,24 @@ function AddPatientDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
 
     setSubmitting(true);
     try {
-      await axiosInstance.post("/doctor/create-patient", form);
+      const response = await axiosInstance.post("/doctor/create-patient", form);
       
-      // Revalidate the patients list
-      await mutate("/patient/get-all-patients");
+      // Create the new patient object with current timestamp
+      const newPatient = {
+        ...response.data.data || response.data,
+        createdAt: new Date().toISOString(), // Add current timestamp
+      };
+      
+      // Optimistic update - add new patient to the top of the list
+      mutate("/patient/get-all-patients", (currentData: GetPatientsResponse | undefined) => {
+        if (!currentData) return currentData;
+        
+        return {
+          data: {
+            patients: [newPatient, ...currentData.data.patients]
+          }
+        };
+      }, false);
       
       // Show success toast
       toast.success("Patient added successfully!");
@@ -86,9 +127,16 @@ function AddPatientDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
         phone_number: "", 
         medical_history: "" 
       });
+
+      // Revalidate to sync with server
+      mutate("/patient/get-all-patients");
+      
     } catch (error) {
       console.error("Error adding patient:", error);
       toast.error("Failed to add patient. Please try again.");
+      
+      // Revert optimistic update on error
+      mutate("/patient/get-all-patients");
     } finally {
       setSubmitting(false);
     }
@@ -129,18 +177,19 @@ function AddPatientDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
               id="dob"
               type="date"
               value={form.dob}
-              onChange={(e) => setForm((s) => ({ ...s, dob: e.target.value }))}
+              onChange={(e) => handleDobChange(e.target.value)}
             />
           </div>
           
           <div className="grid gap-2">
-            <Label htmlFor="age">Age *</Label>
+            <Label htmlFor="age">Age</Label>
             <Input
               id="age"
               type="text"
               value={form.age}
-              onChange={(e) => setForm((s) => ({ ...s, age: e.target.value }))}
-              placeholder="45"
+              readOnly
+              placeholder="Age will be calculated automatically"
+              className="bg-gray-50 cursor-not-allowed"
             />
           </div>
           
@@ -172,13 +221,13 @@ function AddPatientDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           <div className="grid gap-2">
             <Label htmlFor="medical_history">Medical History</Label>
             <Textarea
-  id="medical_history"
-  className=""
-  value={form.medical_history}
-  onChange={(e) => setForm((s) => ({ ...s, medical_history: e.target.value }))}
-  placeholder="Enter medical history (optional)"
-  rows={3}
-/>
+              id="medical_history"
+              className=""
+              value={form.medical_history}
+              onChange={(e) => setForm((s) => ({ ...s, medical_history: e.target.value }))}
+              placeholder="Enter medical history here..."
+              rows={3}
+            />
           </div>
         </div>
         <DialogFooter className="gap-2">
@@ -198,8 +247,8 @@ export default function PatientsClient() {
   const { data, error, isLoading } = useSWR<GetPatientsResponse>("/patient/get-all-patients", fetcher)
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
-  const [sortBy, setSortBy] = useState<"name" | "age" | "condition" | "lastVisit" | null>(null)
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+  const [sortBy, setSortBy] = useState<"name" | "age" | "condition" | "lastVisit" | "latest" | null>("latest") // Default to latest
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc") // Default to desc for latest first
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
 
@@ -219,8 +268,24 @@ export default function PatientsClient() {
       );
     }
 
-    // Apply sorting
-    if (sortBy) {
+    // Apply sorting - Default to latest first (by creation time or ID)
+    if (sortBy === "latest" || !sortBy) {
+      // Sort by creation time if available, otherwise by ID (assuming newer IDs come later)
+      result.sort((a, b) => {
+        // If createdAt exists, use it
+        if (a.createdAt && b.createdAt) {
+          return sortOrder === "asc" 
+            ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        }
+        
+        // Fallback to ID-based sorting (assuming newer patients have higher/later IDs)
+        const aId = parseInt(a.id) || 0;
+        const bId = parseInt(b.id) || 0;
+        return sortOrder === "asc" ? aId - bId : bId - aId;
+      });
+    } else {
+      // Apply other sorting options
       result.sort((a, b) => {
         let aVal: string | number = "";
         let bVal: string | number = "";
@@ -267,12 +332,12 @@ export default function PatientsClient() {
     setCurrentPage(1);
   }, [query, sortBy, sortOrder]);
 
-  const handleSort = (field: "age" | "condition" | "lastVisit") => {
+  const handleSort = (field: "name" | "age" | "condition" | "lastVisit" | "latest") => {
     if (sortBy === field) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     } else {
       setSortBy(field);
-      setSortOrder("asc");
+      setSortOrder(field === "latest" ? "desc" : "asc"); // Latest should default to desc
     }
   };
 
@@ -306,8 +371,8 @@ export default function PatientsClient() {
 
   return (
     <div className="space-y-4">
-      {/* Search Only */}
-      <div className="flex items-center">
+      {/* Search and Sort Controls */}
+      <div className="flex items-center gap-4">
         <div className="relative w-full max-w-md">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -316,6 +381,13 @@ export default function PatientsClient() {
             placeholder="Search patients"
             className="pl-9 bg-emerald-50/60 border-emerald-200 focus-visible:ring-emerald-200"
           />
+        </div>
+        
+        {/* Sort Options */}
+        <div className="flex items-center gap-2">
+          
+          
+          
         </div>
       </div>
 
@@ -329,13 +401,24 @@ export default function PatientsClient() {
             </tr>
           </thead>
           <tbody>
-            {paginatedPatients.map((p) => (
+            {paginatedPatients.map((p, index) => (
               <tr
                 key={p.id}
-                className="border-b last:border-0 hover:bg-muted/30 cursor-pointer"
+                className={`border-b last:border-0 hover:bg-muted/30 cursor-pointer ${
+                  // Highlight recently added patients (first few in the list when sorted by latest)
+                  sortBy === "latest" && index < 3 ? "bg-emerald-50/30" : ""
+                }`}
                 onClick={() => (window.location.href = `/dashboard/patients/${p.id}`)}
               >
-                <td className="px-6 py-4">{p.name}</td>
+                <td className="px-6 py-4 flex items-center gap-2">
+                  {p.name}
+                  {/* Show "NEW" badge for recently added patients */}
+                  {sortBy === "latest" && index === 0 && (
+                    <span className="px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded-full font-medium">
+                      NEW
+                    </span>
+                  )}
+                </td>
                 <td className="px-6 py-4 text-emerald-700">{p.age}</td>
               </tr>
             ))}

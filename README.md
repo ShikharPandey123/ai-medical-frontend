@@ -1,4 +1,4 @@
-# MediCare Pro - AI Medical Frontend 🏥
+# MediCare Pro 🏥
 
 A modern, AI-powered medical management system built with Next.js 15, designed to streamline healthcare workflows and enhance patient care through intelligent digital solutions.
 

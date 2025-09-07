@@ -1,3 +1,6 @@
+<img width="1894" height="869" alt="Screenshot 2025-09-07 164602" src="https://github.com/user-attachments/assets/4a4cf5fc-a694-4aa8-8c8c-db27e673d070" />
+<img width="1896" height="860" alt="Screenshot 2025-09-07 164549" src="https://github.com/user-attachments/assets/b8daaaa6-1b37-4ace-a881-d8f6475b0a0c" />
+<img width="1919" height="869" alt="Screenshot 2025-09-07 164408" src="https://github.com/user-attachments/assets/0cd775dc-8682-41cb-a721-7d1df90b4d79" />
 # MediCare Pro 🏥
 
 A modern, AI-powered medical management system built with Next.js 15, designed to streamline healthcare workflows and enhance patient care through intelligent digital solutions.
